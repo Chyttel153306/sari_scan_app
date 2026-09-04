@@ -1,0 +1,25 @@
+name: sari_scan_app
+description: "A new Flutter project."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  image_picker: ^1.2.3
+  local_auth: ^3.0.2
+  mobile_scanner: ^7.4.0
+  path_provider: ^2.1.5
+  pdf: ^3.13.0
+  printing: ^5.15.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
