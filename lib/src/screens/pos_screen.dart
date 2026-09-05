@@ -3,7 +3,11 @@ import 'package:flutter/material.dart';
 import '../models/models.dart';
 import '../store/app_store.dart';
 import '../utils/formatters.dart';
-import '../widgets/product_image.dart';
+import '../widgets/catalog_product_card.dart';
+import '../widgets/design_system.dart';
+import '../theme/app_theme.dart';
+import '../widgets/price_text.dart';
+import '../widgets/product_grid.dart';
 import 'barcode_scanner_screen.dart';
 import 'checkout_screen.dart';
 import 'products_screen.dart';
@@ -180,7 +184,15 @@ class _PosScreenState extends State<PosScreen> {
                       final category = categories[index];
                       return ChoiceChip(
                         label: Text(category == 'All' ? 'All Items' : category),
+                        labelStyle: TextStyle(
+                          color: _category == category
+                              ? Colors.white
+                              : AppTheme.muted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
                         selected: _category == category,
+                        selectedColor: AppTheme.emerald,
                         showCheckmark: false,
                         padding: const EdgeInsets.symmetric(horizontal: 10),
                         onSelected: (_) => setState(() => _category = category),
@@ -189,238 +201,125 @@ class _PosScreenState extends State<PosScreen> {
                   ),
                 ),
               ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  child: Text(
+                    '${_visibleProducts.length} products available',
+                    style: const TextStyle(fontSize: 12, color: AppTheme.muted),
+                  ),
+                ),
+              ),
               if (_visibleProducts.isEmpty)
                 const SliverFillRemaining(
                   hasScrollBody: false,
-                  child: Center(child: Text('No matching products found.')),
+                  child: Center(
+                    child: EmptyState(
+                      title: 'No matching products found.',
+                      message: 'Add products in inventory to start selling.',
+                    ),
+                  ),
                 )
               else
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 110),
-                  sliver: SliverGrid.builder(
-                    gridDelegate:
-                        const SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 260,
-                          mainAxisExtent: 226,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 12,
-                        ),
-                    itemCount: _visibleProducts.length,
-                    itemBuilder: (context, index) {
-                      final product = _visibleProducts[index];
-                      return _ProductCard(
-                        product: product,
-                        onAdd: product.stock > 0
-                            ? () => widget.store.addToCart(product)
-                            : null,
-                      );
-                    },
+                  sliver: SliverLayoutBuilder(
+                    builder: (context, constraints) => SliverGrid.builder(
+                      gridDelegate: productGridDelegate(
+                        context,
+                        availableWidth: constraints.crossAxisExtent,
+                      ),
+                      itemCount: _visibleProducts.length,
+                      itemBuilder: (context, index) {
+                        final product = _visibleProducts[index];
+                        return CatalogProductCard(
+                          product: product,
+                          onAdd: product.stock > 0
+                              ? () => widget.store.addToCart(product)
+                              : null,
+                        );
+                      },
+                    ),
                   ),
                 ),
             ],
           ),
           if (widget.store.cartItemCount > 0)
             Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: Material(
-                color: Theme.of(context).colorScheme.primaryContainer,
-                elevation: 10,
-                shadowColor: Theme.of(
-                  context,
-                ).colorScheme.primary.withValues(alpha: 0.24),
-                child: SafeArea(
-                  top: false,
-                  child: SizedBox(
-                    height: 72,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: InkWell(
-                              onTap: _openCart,
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '${widget.store.cartItemCount} Items in Cart',
-                                    style: const TextStyle(
-                                      color: Color(0xFFCBFFC2),
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  Text(
-                                    money(widget.store.cartTotal),
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 24,
-                                      height: 1.15,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          FilledButton.icon(
-                            style: FilledButton.styleFrom(
-                              backgroundColor: Colors.white,
-                              foregroundColor: Theme.of(
-                                context,
-                              ).colorScheme.primaryContainer,
-                              minimumSize: const Size(138, 48),
-                              shape: const StadiumBorder(),
-                            ),
-                            onPressed: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    CheckoutScreen(store: widget.store),
-                              ),
-                            ),
-                            iconAlignment: IconAlignment.end,
-                            icon: const Icon(Icons.arrow_forward_rounded),
-                            label: const Text(
-                              'Charge',
-                              style: TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ],
+              left: 12,
+              right: 12,
+              bottom: 12,
+              child: SafeArea(
+                top: false,
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.ink,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x260F172A),
+                        blurRadius: 18,
+                        offset: Offset(0, 6),
                       ),
-                    ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        onPressed: _openCart,
+                        tooltip: 'View cart',
+                        icon: const Icon(
+                          Icons.shopping_bag_outlined,
+                          color: Color(0xFF6EE7B7),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: InkWell(
+                          onTap: _openCart,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${widget.store.cartItemCount} Items in Cart',
+                                style: const TextStyle(
+                                  color: Color(0xFFCBD5E1),
+                                  fontSize: 10,
+                                ),
+                              ),
+                              PriceText(
+                                money(widget.store.cartTotal),
+                                style: const TextStyle(
+                                  fontFamily: 'SpaceGrotesk',
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      FilledButton.icon(
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => CheckoutScreen(store: widget.store),
+                          ),
+                        ),
+                        iconAlignment: IconAlignment.end,
+                        icon: const Icon(Icons.arrow_forward, size: 18),
+                        label: const Text('Charge'),
+                      ),
+                    ],
                   ),
                 ),
               ),
             ),
         ],
-      ),
-    );
-  }
-}
-
-class _ProductCard extends StatelessWidget {
-  const _ProductCard({required this.product, required this.onAdd});
-
-  final Product product;
-  final VoidCallback? onAdd;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onAdd,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(
-              height: 112,
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: ProductImage(imagePath: product.imagePath),
-                  ),
-                  Positioned(
-                    left: 8,
-                    top: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: product.stock == 0
-                            ? colors.errorContainer
-                            : product.isLowStock
-                            ? const Color(0xFFFFEFD6)
-                            : const Color(0xFFE0F3E2),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        product.stock == 0
-                            ? 'OUT OF STOCK'
-                            : product.isLowStock
-                            ? '${product.stock} LEFT'
-                            : '${product.stock} IN STOCK',
-                        style: TextStyle(
-                          color: product.stock == 0
-                              ? colors.error
-                              : product.isLowStock
-                              ? colors.tertiary
-                              : colors.primary,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(10, 10, 8, 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      product.name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        height: 1.2,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const Spacer(),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            money(product.price),
-                            style: Theme.of(context).textTheme.titleLarge
-                                ?.copyWith(
-                                  color: onAdd == null
-                                      ? colors.outline
-                                      : colors.primaryContainer,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                          ),
-                        ),
-                        Container(
-                          width: 42,
-                          height: 42,
-                          decoration: BoxDecoration(
-                            color: onAdd == null
-                                ? colors.surfaceContainerHighest
-                                : colors.primaryContainer,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            Icons.add_rounded,
-                            color: onAdd == null
-                                ? colors.outline
-                                : Colors.white,
-                            size: 28,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -486,11 +385,19 @@ class _CartSheet extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Total', style: Theme.of(context).textTheme.titleLarge),
-              Text(
-                money(store.cartTotal),
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
+              Expanded(
+                child: Text(
+                  'Total',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Flexible(
+                child: PriceText(
+                  money(store.cartTotal),
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
             ],

@@ -1,4 +1,11 @@
-String money(num value) => '₱${value.toStringAsFixed(2)}';
+String money(num value) {
+  final parts = value.toStringAsFixed(2).split('.');
+  final whole = parts.first.replaceAllMapped(
+    RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
+    (match) => '${match[1]},',
+  );
+  return '₱$whole${parts.length > 1 ? '.${parts[1]}' : ''}';
+}
 
 String shortDateTime(DateTime value) {
   final month = value.month.toString().padLeft(2, '0');

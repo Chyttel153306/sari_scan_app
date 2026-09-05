@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../models/models.dart';
+import '../models/sales_trend.dart';
 import '../services/local_storage_service.dart';
 
 class AppStore extends ChangeNotifier {
@@ -100,6 +101,7 @@ class AppStore extends ChangeNotifier {
   }
 
   void addToCart(Product product) {
+    if (product.isArchived || !products.contains(product)) return;
     final current = _cart[product.id] ?? 0;
     if (current >= product.stock) return;
     _cart[product.id] = current + 1;
@@ -174,6 +176,14 @@ class AppStore extends ChangeNotifier {
   void toggleArchive(Product product) {
     product.isArchived = !product.isArchived;
     _cart.remove(product.id);
+    notifyListeners();
+    _queueSave();
+  }
+
+  void deleteProduct(Product product) {
+    _cart.remove(product.id);
+    products.removeWhere((item) => item.id == product.id);
+    // Sales and credit ledgers keep their own saved product details.
     notifyListeners();
     _queueSave();
   }
@@ -287,27 +297,14 @@ class AppStore extends ChangeNotifier {
 
   List<SaleRecord> salesFor(ReportPeriod period, {DateTime? now}) {
     final reference = now ?? DateTime.now();
-    late final DateTime start;
-    switch (period) {
-      case ReportPeriod.today:
-        start = DateTime(reference.year, reference.month, reference.day);
-        break;
-      case ReportPeriod.week:
-        final dayStart = DateTime(
-          reference.year,
-          reference.month,
-          reference.day,
-        );
-        start = dayStart.subtract(Duration(days: reference.weekday - 1));
-        break;
-      case ReportPeriod.month:
-        start = DateTime(reference.year, reference.month);
-        break;
-      case ReportPeriod.year:
-        start = DateTime(reference.year);
-        break;
-    }
-    return sales.where((sale) => !sale.createdAt.isBefore(start)).toList();
+    final start = reportStart(period, reference);
+    return sales
+        .where(
+          (sale) =>
+              !sale.createdAt.isBefore(start) &&
+              !sale.createdAt.isAfter(reference),
+        )
+        .toList();
   }
 
   bool _restoreSnapshot(Map<String, dynamic> snapshot) {

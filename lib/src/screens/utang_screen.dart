@@ -4,6 +4,11 @@ import 'package:flutter/services.dart';
 import '../models/models.dart';
 import '../store/app_store.dart';
 import '../utils/formatters.dart';
+import '../widgets/add_customer_dialog.dart';
+import '../widgets/design_system.dart';
+import '../widgets/price_text.dart';
+import '../models/sales_trend.dart';
+import '../theme/app_theme.dart';
 
 class UtangScreen extends StatefulWidget {
   const UtangScreen({super.key, required this.store});
@@ -16,6 +21,7 @@ class UtangScreen extends StatefulWidget {
 
 class _UtangScreenState extends State<UtangScreen> {
   String _query = '';
+  String _filter = 'All';
 
   List<Customer> get _customers {
     final query = _query.toLowerCase();
@@ -31,49 +37,10 @@ class _UtangScreenState extends State<UtangScreen> {
   }
 
   Future<void> _addCustomer() async {
-    final name = TextEditingController();
-    final phone = TextEditingController();
     final customer = await showDialog<Customer>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add customer'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: name,
-              autofocus: true,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(labelText: 'Customer name'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: phone,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(labelText: 'Phone (optional)'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (name.text.trim().isEmpty) return;
-              Navigator.pop(
-                context,
-                widget.store.addCustomer(name.text, phone.text),
-              );
-            },
-            child: const Text('Add customer'),
-          ),
-        ],
-      ),
+      builder: (_) => AddCustomerDialog(store: widget.store),
     );
-    name.dispose();
-    phone.dispose();
     if (!mounted || customer == null) return;
     Navigator.push(
       context,
@@ -88,121 +55,99 @@ class _UtangScreenState extends State<UtangScreen> {
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: widget.store,
-      builder: (context, _) => Stack(
-        children: [
-          ListView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Utang List',
-                          style: Theme.of(context).textTheme.headlineMedium
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                        Text(
-                          'Total Outstanding: ${money(widget.store.totalOutstanding)}',
-                          style: TextStyle(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
+      builder: (context, _) {
+        final now = DateTime.now();
+        final weekStart = reportStart(ReportPeriod.week, now);
+        final pending = widget.store.customers
+            .where((customer) => customer.balance > 0)
+            .length;
+        final collected = widget.store.customers
+            .expand((customer) => customer.ledger)
+            .where(
+              (entry) =>
+                  entry.type == LedgerEntryType.payment &&
+                  !entry.createdAt.isBefore(weekStart) &&
+                  !entry.createdAt.isAfter(now),
+            )
+            .fold<double>(0, (total, entry) => total + entry.amount);
+        final customers = _customers
+            .where(
+              (customer) =>
+                  _filter == 'All' ||
+                  (_filter == 'Pending'
+                      ? customer.balance > 0
+                      : customer.balance <= 0),
+            )
+            .toList();
+        return Stack(
+          children: [
+            ListView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+              children: [
+                MetricHero(
+                  label: 'Total outstanding balance',
+                  amount: money(widget.store.totalOutstanding),
+                  icon: Icons.menu_book_outlined,
+                  footer: Wrap(
+                    spacing: 14,
+                    runSpacing: 8,
+                    children: [
+                      Text('$pending active debts'),
+                      Text('${money(collected)} collected this week'),
+                    ],
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFEFD6),
-                      border: Border.all(color: const Color(0xFFFABD00)),
-                      borderRadius: BorderRadius.circular(99),
-                    ),
-                    child: Text(
-                      '${widget.store.customers.where((c) => c.balance > 0).length} Pending',
-                      style: const TextStyle(
-                        color: Color(0xFF8C6800),
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 22),
-              TextField(
-                onChanged: (value) => setState(() => _query = value),
-                decoration: const InputDecoration(
-                  hintText: 'Search customer name...',
-                  prefixIcon: Icon(Icons.search),
                 ),
-              ),
-              const SizedBox(height: 14),
-              if (_customers.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.only(top: 42),
-                  child: Center(child: Text('No customers found.')),
-                )
-              else
-                ..._customers.map(
+                const SizedBox(height: 22),
+                TextField(
+                  onChanged: (value) => setState(() => _query = value),
+                  decoration: const InputDecoration(
+                    hintText: 'Search customer name or phone...',
+                    prefixIcon: Icon(Icons.search, size: 20),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  children: ['All', 'Pending', 'Paid']
+                      .map(
+                        (filter) => ChoiceChip(
+                          label: Text(
+                            filter == 'All'
+                                ? 'All (${widget.store.customers.length})'
+                                : filter,
+                          ),
+                          selected: _filter == filter,
+                          showCheckmark: false,
+                          labelStyle: TextStyle(
+                            color: _filter == filter
+                                ? Colors.white
+                                : AppTheme.muted,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          onSelected: (_) => setState(() => _filter = filter),
+                        ),
+                      )
+                      .toList(),
+                ),
+                const SizedBox(height: 20),
+                const SectionHeading(
+                  'Customer records',
+                  subtitle: 'Highest balance first',
+                ),
+                const SizedBox(height: 12),
+                if (customers.isEmpty)
+                  const EmptyState(
+                    title: 'No customers found.',
+                    message: 'Add a customer or choose another filter.',
+                    icon: Icons.people_outline,
+                  ),
+                ...customers.map(
                   (customer) => Padding(
                     padding: const EdgeInsets.only(bottom: 10),
                     child: Card(
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.all(12),
-                        leading: CircleAvatar(
-                          backgroundColor: const Color(0xFFEAE7E7),
-                          foregroundColor: Theme.of(
-                            context,
-                          ).colorScheme.primary,
-                          child: Text(
-                            customer.name.isEmpty
-                                ? '?'
-                                : customer.name.substring(0, 1).toUpperCase(),
-                            style: const TextStyle(fontWeight: FontWeight.w800),
-                          ),
-                        ),
-                        title: Text(
-                          customer.name,
-                          style: const TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                        subtitle: Text(
-                          customer.phone.isEmpty
-                              ? '${customer.ledger.length} ledger entries'
-                              : customer.phone,
-                        ),
-                        trailing: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              money(customer.balance),
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w800,
-                                color: customer.balance > 0
-                                    ? Theme.of(context).colorScheme.error
-                                    : Theme.of(context).colorScheme.primary,
-                              ),
-                            ),
-                            if (customer.balance > 0)
-                              Text(
-                                'Pending',
-                                style: TextStyle(
-                                  color: Theme.of(context).colorScheme.error,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                          ],
-                        ),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(20),
                         onTap: () => Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -212,24 +157,120 @@ class _UtangScreenState extends State<UtangScreen> {
                             ),
                           ),
                         ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 42,
+                                height: 42,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: customer.balance > 0
+                                      ? const Color(0xFFFFFBEB)
+                                      : AppTheme.mint,
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: Text(
+                                  customer.name.trim().isEmpty
+                                      ? '?'
+                                      : customer.name
+                                            .trim()
+                                            .split(RegExp(r'\s+'))
+                                            .take(2)
+                                            .map(
+                                              (word) => word.characters.first,
+                                            )
+                                            .join()
+                                            .toUpperCase(),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 13,
+                                    color: customer.balance > 0
+                                        ? const Color(0xFFB45309)
+                                        : AppTheme.emerald,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                flex: 5,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      customer.name,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      customer.phone.isNotEmpty
+                                          ? customer.phone
+                                          : '${customer.ledger.length} ledger entries',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        color: AppTheme.muted,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Flexible(
+                                flex: 4,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    PriceText(
+                                      money(customer.balance),
+                                      style: const TextStyle(
+                                        fontFamily: 'SpaceGrotesk',
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 5),
+                                    StatusPill(
+                                      customer.balance > 0 ? 'Pending' : 'Paid',
+                                      color: customer.balance > 0
+                                          ? const Color(0xFFB45309)
+                                          : AppTheme.emerald,
+                                      background: customer.balance > 0
+                                          ? const Color(0xFFFFFBEB)
+                                          : AppTheme.mint,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
-            ],
-          ),
-          Positioned(
-            right: 16,
-            bottom: 16,
-            child: FloatingActionButton.extended(
-              heroTag: 'addCustomer',
-              onPressed: _addCustomer,
-              icon: const Icon(Icons.person_add_alt_1),
-              label: const Text('Add customer'),
+              ],
             ),
-          ),
-        ],
-      ),
+            Positioned(
+              right: 16,
+              bottom: 16,
+              child: FloatingActionButton.extended(
+                heroTag: 'addCustomer',
+                onPressed: _addCustomer,
+                icon: const Icon(Icons.person_add_alt_1),
+                label: const Text('Add customer'),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -247,10 +288,11 @@ class CustomerLedgerScreen extends StatelessWidget {
   Future<void> _recordPayment(BuildContext context) async {
     final controller = TextEditingController();
     String? error;
-    await showDialog<void>(
+    final route = DialogRoute<void>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
+          scrollable: true,
           title: const Text('Record payment'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -302,6 +344,8 @@ class CustomerLedgerScreen extends StatelessWidget {
         ),
       ),
     );
+    await Navigator.of(context).push(route);
+    await route.completed;
     controller.dispose();
   }
 
@@ -314,39 +358,28 @@ class CustomerLedgerScreen extends StatelessWidget {
         body: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'TOTAL BALANCE',
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    Text(
-                      money(customer.balance),
-                      style: Theme.of(context).textTheme.headlineMedium
-                          ?.copyWith(
-                            color: Theme.of(context).colorScheme.error,
-                            fontWeight: FontWeight.w800,
-                          ),
-                    ),
-                    if (customer.phone.isNotEmpty) Text(customer.phone),
-                    const SizedBox(height: 14),
-                    FilledButton.icon(
-                      onPressed: customer.balance > 0
-                          ? () => _recordPayment(context)
-                          : null,
-                      icon: const Icon(Icons.payments_outlined),
-                      label: const Text('Pay Utang'),
-                    ),
+            MetricHero(
+              label: 'Customer balance',
+              amount: money(customer.balance),
+              footer: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (customer.phone.isNotEmpty) ...[
+                    Text(customer.phone),
+                    const SizedBox(height: 12),
                   ],
-                ),
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: AppTheme.emerald,
+                    ),
+                    onPressed: customer.balance > 0
+                        ? () => _recordPayment(context)
+                        : null,
+                    icon: const Icon(Icons.payments_outlined),
+                    label: const Text('Pay Utang'),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 18),

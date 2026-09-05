@@ -7,6 +7,9 @@ import 'package:printing/printing.dart';
 
 import '../models/models.dart';
 import '../utils/formatters.dart';
+import '../theme/app_theme.dart';
+import '../widgets/design_system.dart';
+import '../widgets/price_text.dart';
 
 class ReceiptScreen extends StatelessWidget {
   const ReceiptScreen({super.key, required this.sale});
@@ -124,187 +127,316 @@ class ReceiptScreen extends StatelessWidget {
     final isCash = sale.paymentType == PaymentType.cash;
     return Scaffold(
       appBar: AppBar(title: const Text('Transaction Complete')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          if (isCash) ...[
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Payment',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(top: BorderSide(color: AppTheme.border)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _print(context),
+                      icon: const Icon(Icons.print_outlined, size: 18),
+                      label: const Text('Print'),
                     ),
-                    const SizedBox(height: 16),
-                    const Text('Amount Received'),
-                    const SizedBox(height: 4),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: Theme.of(context).colorScheme.outlineVariant,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _share(context),
+                      icon: const Icon(Icons.share_outlined, size: 18),
+                      label: const Text('Send'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              FilledButton.icon(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.add_circle_outline, size: 19),
+                label: const Text('New Transaction'),
+              ),
+            ],
+          ),
+        ),
+      ),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 26),
+            children: [
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SectionHeading(
+                        isCash ? 'Payment & change' : 'Utang recorded',
+                        trailing: StatusPill(
+                          isCash ? 'Paid in cash' : 'Store credit',
+                          icon: Icons.check_circle_outline,
                         ),
-                        borderRadius: BorderRadius.circular(12),
                       ),
-                      child: Text(
+                      const SizedBox(height: 18),
+                      const Text(
+                        'Amount received',
+                        style: TextStyle(fontSize: 11, color: AppTheme.muted),
+                      ),
+                      const SizedBox(height: 4),
+                      PriceText(
                         money(sale.amountReceived),
                         style: const TextStyle(
-                          fontSize: 26,
+                          fontFamily: 'SpaceGrotesk',
+                          fontSize: 28,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                    ),
-                    const Divider(height: 32),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Total Due'),
-                            Text(
-                              money(sale.total),
-                              style: const TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              'Change',
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.primary,
-                              ),
-                            ),
-                            Text(
-                              money(sale.change),
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.primary,
-                                fontSize: 28,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 18),
-          ],
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Center(
-                    child: CircleAvatar(
-                      radius: 28,
-                      backgroundColor: Theme.of(context).colorScheme.primary,
-                      foregroundColor: Colors.white,
-                      child: const Icon(Icons.storefront_rounded),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    'Tindahan POS',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  _ReceiptRow(label: 'Receipt', value: receiptNumber(sale.id)),
-                  _ReceiptRow(
-                    label: 'Date',
-                    value: shortDateTime(sale.createdAt),
-                  ),
-                  _ReceiptRow(
-                    label: 'Payment',
-                    value: isCash ? 'Cash' : 'Utang',
-                  ),
-                  const Divider(height: 28),
-                  ...sale.items.map(
-                    (item) => Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 6),
-                      child: Row(
+                      const Divider(height: 28),
+                      Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
-                            child: Text(
-                              '${item.quantity} × ${item.productName}\n'
-                              '${money(item.unitPrice)} each',
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Total due',
+                                  style: TextStyle(
+                                    color: AppTheme.muted,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                                PriceText(
+                                  money(sale.total),
+                                  style: const TextStyle(
+                                    fontFamily: 'SpaceGrotesk',
+                                    fontSize: 23,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          Text(money(item.subtotal)),
+                          const SizedBox(width: 20),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  isCash ? 'Change due' : 'Added to ledger',
+                                  style: const TextStyle(
+                                    color: AppTheme.emerald,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                                PriceText(
+                                  money(isCash ? sale.change : sale.total),
+                                  style: const TextStyle(
+                                    fontFamily: 'SpaceGrotesk',
+                                    color: AppTheme.emerald,
+                                    fontSize: 26,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
-                    ),
+                    ],
                   ),
-                  const Divider(height: 28),
-                  _ReceiptRow(
-                    label: 'Total',
-                    value: money(sale.total),
-                    emphasize: true,
-                  ),
-                  if (isCash) ...[
-                    _ReceiptRow(
-                      label: 'Cash received',
-                      value: money(sale.amountReceived),
-                    ),
-                    _ReceiptRow(
-                      label: 'Change',
-                      value: money(sale.change),
-                      emphasize: true,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => _print(context),
-                  icon: const Icon(Icons.print_outlined),
-                  label: const Text('Print'),
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => _share(context),
-                  icon: const Icon(Icons.share_outlined),
-                  label: const Text('Send'),
+              const SizedBox(height: 22),
+              PhysicalShape(
+                clipper: _ReceiptClipper(),
+                color: Colors.white,
+                shadowColor: const Color(0x160F172A),
+                elevation: 3,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(22, 24, 22, 30),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Icon(
+                        Icons.storefront_outlined,
+                        size: 36,
+                        color: AppTheme.ink,
+                      ),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'Tindahan POS',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 19,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -.5,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'SariScan digital receipt',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 11, color: AppTheme.muted),
+                      ),
+                      const SizedBox(height: 16),
+                      _ReceiptRow(
+                        label: 'Receipt',
+                        value: receiptNumber(sale.id),
+                      ),
+                      _ReceiptRow(
+                        label: 'Date',
+                        value: shortDateTime(sale.createdAt),
+                      ),
+                      _ReceiptRow(
+                        label: 'Payment',
+                        value: isCash ? 'Cash' : 'Utang',
+                      ),
+                      const Divider(height: 28),
+                      const Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'ITEM DESCRIPTION',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                                color: AppTheme.muted,
+                                letterSpacing: .8,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            'SUBTOTAL',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.muted,
+                              letterSpacing: .8,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      ...sale.items.map(
+                        (item) => Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      item.productName,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '${item.quantity} × ${money(item.unitPrice)}',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: AppTheme.muted,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Flexible(
+                                child: Align(
+                                  alignment: Alignment.centerRight,
+                                  child: PriceText(
+                                    money(item.subtotal),
+                                    style: const TextStyle(
+                                      fontFamily: 'SpaceGrotesk',
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const Divider(height: 28),
+                      _ReceiptRow(
+                        label: 'Total bill',
+                        value: money(sale.total),
+                        emphasize: true,
+                      ),
+                      if (isCash) ...[
+                        _ReceiptRow(
+                          label: 'Cash tendered',
+                          value: money(sale.amountReceived),
+                        ),
+                        _ReceiptRow(
+                          label: 'Change returned',
+                          value: money(sale.change),
+                        ),
+                      ],
+                      const Divider(height: 28),
+                      const Text(
+                        'Salamat sa inyong pagtangkilik!',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 11, color: AppTheme.muted),
+                      ),
+                      const SizedBox(height: 8),
+                      const Icon(
+                        Icons.check_circle_outline,
+                        size: 18,
+                        color: AppTheme.emerald,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          FilledButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('New Transaction'),
-          ),
-        ],
+        ),
       ),
     );
   }
+}
+
+class _ReceiptClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    final path = Path()
+      ..moveTo(18, 0)
+      ..lineTo(size.width - 18, 0)
+      ..quadraticBezierTo(size.width, 0, size.width, 18)
+      ..lineTo(size.width, size.height - 8);
+    final teeth = (size.width / 14).round();
+    final width = size.width / teeth;
+    for (var i = teeth; i > 0; i--) {
+      path
+        ..lineTo((i - .5) * width, size.height)
+        ..lineTo((i - 1) * width, size.height - 8);
+    }
+    return path
+      ..lineTo(0, 18)
+      ..quadraticBezierTo(0, 0, 18, 0)
+      ..close();
+  }
+
+  @override
+  bool shouldReclip(_ReceiptClipper oldClipper) => false;
 }
 
 class _ReceiptRow extends StatelessWidget {
@@ -333,7 +465,10 @@ class _ReceiptRow extends StatelessWidget {
           Expanded(child: Text(label, style: style)),
           const SizedBox(width: 12),
           Flexible(
-            child: Text(value, textAlign: TextAlign.right, style: style),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Text(value, textAlign: TextAlign.right, style: style),
+            ),
           ),
         ],
       ),

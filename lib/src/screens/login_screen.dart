@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../services/phone_security_service.dart';
 import '../store/app_store.dart';
+import '../widgets/design_system.dart';
+import '../theme/app_theme.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({
@@ -62,172 +64,165 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     return Scaffold(
-      body: DecoratedBox(
+      body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFFF0FAF2), Color(0xFFF8FCF7)],
+          gradient: RadialGradient(
+            center: Alignment(0, -.7),
+            radius: 1.2,
+            colors: [Color(0xFFD1FAE5), Color(0xFFF8FAFC)],
           ),
         ),
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 28),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 430),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Center(
-                      child: Container(
-                        width: 96,
-                        height: 96,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF2E8B3A),
-                          borderRadius: BorderRadius.circular(22),
-                          boxShadow: [
-                            BoxShadow(
-                              color: colors.primary.withValues(alpha: 0.16),
-                              blurRadius: 24,
-                              offset: const Offset(0, 10),
-                            ),
-                          ],
-                        ),
-                        child: const Icon(
-                          Icons.storefront_outlined,
-                          color: Colors.white,
-                          size: 52,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
+                    const Center(child: BrandMark(size: 84)),
+                    const SizedBox(height: 24),
                     Text(
                       'SariScan',
                       textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.headlineLarge
-                          ?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: colors.primary,
-                          ),
+                      style: Theme.of(context).textTheme.headlineLarge,
                     ),
-                    Text(
+                    const SizedBox(height: 6),
+                    const Text(
                       "Your Store's Best Friend",
                       textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: colors.onSurfaceVariant,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppTheme.muted,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
-                    const SizedBox(height: 38),
+                    const SizedBox(height: 34),
                     Card(
-                      clipBehavior: Clip.antiAlias,
-                      child: Column(
-                        children: [
-                          Container(height: 4, color: colors.primary),
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(22, 16, 22, 24),
-                            child: Form(
-                              key: _formKey,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  TextFormField(
-                                    controller: _nameController,
-                                    autofocus: true,
-                                    textCapitalization:
-                                        TextCapitalization.words,
-                                    textInputAction: TextInputAction.done,
-                                    autofillHints: const [AutofillHints.name],
-                                    onFieldSubmitted: (_) => _submit(),
-                                    decoration: const InputDecoration(
-                                      labelText: 'Your Name',
-                                      hintText: 'e.g., Maria Santos',
-                                      prefixIcon: Icon(Icons.person_outline),
-                                    ),
-                                    validator: (value) =>
-                                        value == null || value.trim().isEmpty
-                                        ? 'Enter your name.'
-                                        : null,
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Form(
+                          key: _formKey,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              const Text(
+                                'Welcome to your store',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -.4,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              const Text(
+                                'A secure start to a better business day.',
+                                style: TextStyle(
+                                  color: AppTheme.muted,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                              TextFormField(
+                                controller: _nameController,
+                                textCapitalization: TextCapitalization.words,
+                                textInputAction: TextInputAction.done,
+                                autofillHints: const [AutofillHints.name],
+                                onFieldSubmitted: (_) =>
+                                    _submitting ? null : _submit(),
+                                decoration: const InputDecoration(
+                                  labelText: 'Your Name',
+                                  hintText: 'e.g., Maria Santos',
+                                  prefixIcon: Icon(
+                                    Icons.person_outline,
+                                    size: 20,
                                   ),
-                                  const SizedBox(height: 22),
-                                  Container(
-                                    padding: const EdgeInsets.all(16),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFF8FBF8),
-                                      borderRadius: BorderRadius.circular(12),
+                                ),
+                                validator: (value) =>
+                                    value == null || value.trim().isEmpty
+                                    ? 'Enter your name.'
+                                    : null,
+                              ),
+                              const SizedBox(height: 18),
+                              Container(
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.canvas,
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: const Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Icon(
+                                      Icons.fingerprint,
+                                      color: AppTheme.emerald,
+                                      size: 26,
                                     ),
-                                    child: Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Icon(
-                                          Icons.fingerprint_rounded,
-                                          color: colors.primary,
-                                          size: 28,
+                                    SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        "To secure your access, you will be asked to use your phone's security feature (fingerprint, face scan, PIN, pattern, or password).",
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          height: 1.65,
+                                          color: AppTheme.muted,
                                         ),
-                                        const SizedBox(width: 12),
-                                        const Expanded(
-                                          child: Text(
-                                            'To secure your access, you will be '
-                                            "asked to use your phone's security "
-                                            'feature (fingerprint, face scan, PIN, '
-                                            'pattern, or password).',
-                                            style: TextStyle(height: 1.4),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  if (_error != null) ...[
-                                    const SizedBox(height: 14),
-                                    Text(
-                                      _error!,
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        color: colors.error,
-                                        fontWeight: FontWeight.w600,
                                       ),
                                     ),
                                   ],
-                                  const SizedBox(height: 22),
-                                  FilledButton.icon(
-                                    onPressed: _submitting ? null : _submit,
-                                    icon: _submitting
-                                        ? const SizedBox.square(
-                                            dimension: 20,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              color: Colors.white,
-                                            ),
-                                          )
-                                        : const Icon(Icons.fingerprint_rounded),
-                                    label: Text(
-                                      _submitting
-                                          ? 'Checking phone security...'
-                                          : 'Continue with Phone Security',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                      ),
+                                ),
+                              ),
+                              if (_error != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 14),
+                                  child: Text(
+                                    _error!,
+                                    style: TextStyle(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.error,
+                                      fontSize: 12,
                                     ),
                                   ),
-                                ],
+                                ),
+                              const SizedBox(height: 22),
+                              FilledButton.icon(
+                                onPressed: _submitting ? null : _submit,
+                                icon: _submitting
+                                    ? const SizedBox.square(
+                                        dimension: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : const Icon(Icons.fingerprint, size: 20),
+                                label: Text(
+                                  _submitting
+                                      ? 'Checking phone security...'
+                                      : 'Continue with Phone Security',
+                                  textAlign: TextAlign.center,
+                                ),
                               ),
-                            ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 30),
+                    const SizedBox(height: 28),
+                    const Icon(
+                      Icons.shield_outlined,
+                      color: AppTheme.emerald,
+                      size: 20,
+                    ),
+                    const SizedBox(height: 8),
                     Text(
                       widget.store.storageError ??
                           'Offline mode: all store data stays on this phone.',
                       textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colors.onSurfaceVariant,
-                      ),
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],
                 ),

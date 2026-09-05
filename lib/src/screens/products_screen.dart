@@ -4,8 +4,11 @@ import 'package:image_picker/image_picker.dart';
 
 import '../models/models.dart';
 import '../store/app_store.dart';
-import '../utils/formatters.dart';
 import '../widgets/product_image.dart';
+import '../widgets/catalog_product_card.dart';
+import '../widgets/design_system.dart';
+import '../theme/app_theme.dart';
+import '../widgets/product_grid.dart';
 import 'barcode_scanner_screen.dart';
 
 class ProductsScreen extends StatefulWidget {
@@ -20,6 +23,7 @@ class ProductsScreen extends StatefulWidget {
 class _ProductsScreenState extends State<ProductsScreen> {
   final _searchController = TextEditingController();
   String _query = '';
+  String _category = 'All';
   bool _showArchived = false;
 
   @override
@@ -32,6 +36,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
     final query = _query.toLowerCase();
     return widget.store.products.where((product) {
       if (!_showArchived && product.isArchived) return false;
+      if (_category != 'All' && product.category != _category) return false;
       return query.isEmpty ||
           product.name.toLowerCase().contains(query) ||
           product.category.toLowerCase().contains(query) ||
@@ -48,6 +53,37 @@ class _ProductsScreenState extends State<ProductsScreen> {
     );
   }
 
+  Future<void> _deleteProduct(Product product) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete product?'),
+        content: Text(
+          'Delete ${product.name} from inventory and the cart? '
+          'Past sales and utang records will be kept. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete product'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+    widget.store.deleteProduct(product);
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('${product.name} deleted.')));
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -61,61 +97,98 @@ class _ProductsScreenState extends State<ProductsScreen> {
                 controller: _searchController,
                 onChanged: (value) => setState(() => _query = value),
                 decoration: const InputDecoration(
-                  hintText: 'Search products, categories, or barcodes',
+                  hintText: 'Search products...',
+                  isDense: true,
                   prefixIcon: Icon(Icons.search),
                 ),
               ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Show archived products'),
-                value: _showArchived,
-                onChanged: (value) => setState(() => _showArchived = value),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 48,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children:
+                      {
+                            'All',
+                            ...widget.store.products.map(
+                              (product) => product.category,
+                            ),
+                          }
+                          .map(
+                            (category) => Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: ChoiceChip(
+                                label: Text(
+                                  category == 'All' ? 'All Items' : category,
+                                ),
+                                labelStyle: TextStyle(
+                                  color: _category == category
+                                      ? Colors.white
+                                      : AppTheme.muted,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                selected: _category == category,
+                                selectedColor: AppTheme.emerald,
+                                showCheckmark: false,
+                                onSelected: (_) =>
+                                    setState(() => _category = category),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                ),
               ),
               Row(
                 children: [
                   Expanded(
-                    child: _InventorySummary(
-                      label: 'Active products',
-                      value: '${widget.store.activeProducts.length}',
-                      icon: Icons.inventory_2_outlined,
+                    child: Text(
+                      '${_products.length} products',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.muted,
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _InventorySummary(
-                      label: 'Low stock',
-                      value:
-                          '${widget.store.activeProducts.where((p) => p.isLowStock).length}',
-                      icon: Icons.warning_amber_rounded,
+                  const Flexible(
+                    child: Text(
+                      'Show archived',
+                      style: TextStyle(fontSize: 12),
                     ),
+                  ),
+                  Switch(
+                    value: _showArchived,
+                    onChanged: (value) => setState(() => _showArchived = value),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 4),
               if (_products.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.only(top: 48),
-                  child: Center(child: Text('No products found.')),
+                const EmptyState(
+                  title: 'No products found.',
+                  message: 'Add a product or try a different search.',
                 )
               else
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 260,
-                    mainAxisExtent: 250,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
+                LayoutBuilder(
+                  builder: (context, constraints) => GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: productGridDelegate(
+                      context,
+                      availableWidth: constraints.maxWidth,
+                    ),
+                    itemCount: _products.length,
+                    itemBuilder: (context, index) {
+                      final product = _products[index];
+                      return CatalogProductCard(
+                        inventory: true,
+                        product: product,
+                        onEdit: () => _editProduct(product),
+                        onArchive: () => widget.store.toggleArchive(product),
+                        onDelete: () => _deleteProduct(product),
+                      );
+                    },
                   ),
-                  itemCount: _products.length,
-                  itemBuilder: (context, index) {
-                    final product = _products[index];
-                    return _InventoryCard(
-                      product: product,
-                      onEdit: () => _editProduct(product),
-                      onArchive: () => widget.store.toggleArchive(product),
-                    );
-                  },
                 ),
             ],
           ),
@@ -130,189 +203,6 @@ class _ProductsScreenState extends State<ProductsScreen> {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _InventoryCard extends StatelessWidget {
-  const _InventoryCard({
-    required this.product,
-    required this.onEdit,
-    required this.onArchive,
-  });
-
-  final Product product;
-  final VoidCallback onEdit;
-  final VoidCallback onArchive;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final statusColor = product.stock == 0 || product.isArchived
-        ? colors.error
-        : product.isLowStock
-        ? const Color(0xFFBA1A1A)
-        : colors.primary;
-    final statusBackground = product.stock == 0 || product.isArchived
-        ? colors.errorContainer
-        : product.isLowStock
-        ? const Color(0xFFFFDAD6)
-        : const Color(0xFFE0F3E2);
-
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SizedBox(
-            height: 142,
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: ProductImage(imagePath: product.imagePath),
-                ),
-                Positioned(
-                  left: 10,
-                  top: 10,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: statusBackground,
-                      borderRadius: BorderRadius.circular(5),
-                    ),
-                    child: Text(
-                      product.isArchived
-                          ? 'ARCHIVED'
-                          : product.stock == 0
-                          ? 'OUT OF STOCK'
-                          : product.isLowStock
-                          ? 'LOW: ${product.stock}'
-                          : 'IN STOCK: ${product.stock}',
-                      style: TextStyle(
-                        color: statusColor,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  right: 2,
-                  top: 2,
-                  child: PopupMenuButton<String>(
-                    onSelected: (value) {
-                      if (value == 'edit') onEdit();
-                      if (value == 'archive') onArchive();
-                    },
-                    itemBuilder: (_) => [
-                      if (!product.isArchived)
-                        const PopupMenuItem(
-                          value: 'edit',
-                          child: Text('Edit product'),
-                        ),
-                      PopupMenuItem(
-                        value: 'archive',
-                        child: Text(
-                          product.isArchived
-                              ? 'Restore product'
-                              : 'Archive product',
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    product.name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 17,
-                      height: 1.2,
-                      fontWeight: FontWeight.w500,
-                      decoration: product.isArchived
-                          ? TextDecoration.lineThrough
-                          : null,
-                    ),
-                  ),
-                  const Spacer(),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          money(product.price),
-                          style: TextStyle(
-                            color: colors.primaryContainer,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                      IconButton.filledTonal(
-                        tooltip: 'Edit product',
-                        onPressed: product.isArchived ? null : onEdit,
-                        icon: const Icon(Icons.edit_rounded),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InventorySummary extends StatelessWidget {
-  const _InventorySummary({
-    required this.label,
-    required this.value,
-    required this.icon,
-  });
-
-  final String label;
-  final String value;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          children: [
-            Icon(icon, color: Theme.of(context).colorScheme.primary),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    value,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  Text(label, style: Theme.of(context).textTheme.bodySmall),
-                ],
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

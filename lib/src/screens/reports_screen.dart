@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../models/models.dart';
+import '../models/sales_trend.dart';
 import '../store/app_store.dart';
 import '../utils/formatters.dart';
+import '../widgets/price_text.dart';
+import '../widgets/sales_trend_chart.dart';
+import '../widgets/design_system.dart';
+import '../theme/app_theme.dart';
 import 'receipt_screen.dart';
 
 class ReportsScreen extends StatefulWidget {
@@ -31,7 +36,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
     return ListenableBuilder(
       listenable: widget.store,
       builder: (context, _) {
-        final sales = widget.store.salesFor(_period);
+        final now = DateTime.now();
+        final sales = widget.store.salesFor(_period, now: now);
         final total = sales.fold<double>(0, (sum, sale) => sum + sale.total);
         final cash = sales
             .where((sale) => sale.paymentType == PaymentType.cash)
@@ -53,7 +59,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                           (item.unitPrice - item.unitCost!) * item.quantity,
                     ),
               );
-        final trend = _buildTrend(_period, sales);
+        final trend = buildSalesTrend(_period, sales, now: now);
         final quantityByProduct = <String, int>{};
         for (final sale in sales) {
           for (final item in sale.items) {
@@ -70,90 +76,98 @@ class _ReportsScreenState extends State<ReportsScreen> {
         return ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
           children: [
-            Text(
-              'Reports',
-              style: Theme.of(
-                context,
-              ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 48,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: ReportPeriod.values.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 8),
-                itemBuilder: (context, index) {
-                  final period = ReportPeriod.values[index];
-                  return ChoiceChip(
-                    label: Text(_label(period)),
-                    selected: _period == period,
-                    showCheckmark: false,
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    onSelected: (_) => setState(() => _period = period),
-                  );
-                },
+            Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEFF3F7),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                children: ReportPeriod.values
+                    .map(
+                      (period) => Expanded(
+                        child: InkWell(
+                          onTap: () => setState(() => _period = period),
+                          borderRadius: BorderRadius.circular(12),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 160),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            decoration: BoxDecoration(
+                              color: _period == period
+                                  ? Colors.white
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              _label(period),
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: _period == period
+                                    ? FontWeight.w800
+                                    : FontWeight.w500,
+                                color: _period == period
+                                    ? const Color(0xFF065F46)
+                                    : AppTheme.muted,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(),
               ),
             ),
             const SizedBox(height: 18),
-            Card(
-              color: Theme.of(context).colorScheme.primary,
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Total Sales',
-                      style: TextStyle(color: Color(0xFFCBFFC2), fontSize: 16),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      money(total),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 32,
-                        height: 1.25,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 18),
-                      child: Divider(color: Color(0x5588D982)),
-                    ),
-                    Row(
+            MetricHero(
+              label: 'Total sales',
+              amount: money(total),
+              icon: Icons.trending_up,
+              footer: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(
-                          Icons.receipt_long_outlined,
-                          color: Color(0xFFCBFFC2),
-                        ),
-                        const SizedBox(width: 10),
-                        const Text(
-                          'Transactions',
-                          style: TextStyle(
-                            color: Color(0xFFCBFFC2),
-                            fontSize: 16,
-                          ),
-                        ),
-                        const Spacer(),
+                        const Text('Transactions'),
+                        const SizedBox(height: 4),
                         Text(
-                          '${sales.length}',
+                          '${sales.length} orders',
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 24,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
                           ),
                         ),
                       ],
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Average basket'),
+                        const SizedBox(height: 4),
+                        PriceText(
+                          money(sales.isEmpty ? 0 : total / sales.length),
+                          style: const TextStyle(
+                            fontFamily: 'SpaceGrotesk',
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 16),
             Card(
               child: Padding(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(16),
                 child: Row(
                   children: [
                     Expanded(
@@ -165,7 +179,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                             style: Theme.of(context).textTheme.titleMedium,
                           ),
                           const SizedBox(height: 4),
-                          Text(
+                          PriceText(
                             netProfit == null ? '—' : money(netProfit),
                             style: Theme.of(context).textTheme.headlineSmall
                                 ?.copyWith(fontWeight: FontWeight.w800),
@@ -193,13 +207,19 @@ class _ReportsScreenState extends State<ReportsScreen> {
             const SizedBox(height: 22),
             Card(
               child: Padding(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'Sales Trend',
                       style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${shortDateTime(reportStart(_period, now)).split(' ').first} to '
+                      '${shortDateTime(now).split(' ').first}',
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
                     const SizedBox(height: 20),
                     if (sales.isEmpty)
@@ -213,7 +233,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         ),
                       )
                     else
-                      _SalesTrendChart(points: trend),
+                      SalesTrendChart(key: ValueKey(_period), points: trend),
                   ],
                 ),
               ),
@@ -260,12 +280,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
             const SizedBox(height: 22),
             Card(
               child: Padding(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Payment Methods',
+                      'Payment breakdown',
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: 18),
@@ -290,12 +310,15 @@ class _ReportsScreenState extends State<ReportsScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'Transaction history',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                Expanded(
+                  child: Text(
+                    'Transaction history',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
+                const SizedBox(width: 12),
                 Text('${sales.length} record(s)'),
               ],
             ),
@@ -324,6 +347,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       ),
                       title: Text(
                         receiptNumber(sale.id),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
                       subtitle: Text(
@@ -331,9 +356,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         '${sale.items.length} product line(s) • ${sale.paymentType == PaymentType.cash ? 'Cash' : 'Utang'}',
                       ),
                       isThreeLine: true,
-                      trailing: Text(
-                        money(sale.total),
-                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      trailing: SizedBox(
+                        width: 90,
+                        child: PriceText(
+                          money(sale.total),
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
                       ),
                       onTap: () => Navigator.push(
                         context,
@@ -373,10 +401,13 @@ class _PaymentBar extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(label),
-            Text(
-              money(value),
-              style: const TextStyle(fontWeight: FontWeight.w700),
+            Expanded(child: Text(label)),
+            const SizedBox(width: 12),
+            Flexible(
+              child: PriceText(
+                money(value),
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
             ),
           ],
         ),
@@ -391,109 +422,6 @@ class _PaymentBar extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _TrendPoint {
-  const _TrendPoint(this.label, this.value);
-
-  final String label;
-  final double value;
-}
-
-List<_TrendPoint> _buildTrend(ReportPeriod period, List<SaleRecord> sales) {
-  late final List<String> labels;
-  late final int Function(DateTime) bucketFor;
-  switch (period) {
-    case ReportPeriod.today:
-      labels = const ['12am', '4am', '8am', '12pm', '4pm', '8pm'];
-      bucketFor = (date) => date.hour ~/ 4;
-    case ReportPeriod.week:
-      labels = const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      bucketFor = (date) => date.weekday - 1;
-    case ReportPeriod.month:
-      labels = const ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5'];
-      bucketFor = (date) => ((date.day - 1) ~/ 7).clamp(0, 4);
-    case ReportPeriod.year:
-      labels = const [
-        'Jan',
-        'Feb',
-        'Mar',
-        'Apr',
-        'May',
-        'Jun',
-        'Jul',
-        'Aug',
-        'Sep',
-        'Oct',
-        'Nov',
-        'Dec',
-      ];
-      bucketFor = (date) => date.month - 1;
-  }
-  final totals = List<double>.filled(labels.length, 0);
-  for (final sale in sales) {
-    final bucket = bucketFor(sale.createdAt);
-    totals[bucket] += sale.total;
-  }
-  return List.generate(
-    labels.length,
-    (index) => _TrendPoint(labels[index], totals[index]),
-  );
-}
-
-class _SalesTrendChart extends StatelessWidget {
-  const _SalesTrendChart({required this.points});
-
-  final List<_TrendPoint> points;
-
-  @override
-  Widget build(BuildContext context) {
-    final maxValue = points.fold<double>(
-      0,
-      (maximum, point) => point.value > maximum ? point.value : maximum,
-    );
-    return SizedBox(
-      height: 150,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: points.map((point) {
-          final fraction = maxValue == 0 ? 0.0 : point.value / maxValue;
-          return Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 3),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Tooltip(
-                    message: '${point.label}: ${money(point.value)}',
-                    child: Container(
-                      height: point.value == 0 ? 2 : 92 * fraction + 10,
-                      decoration: BoxDecoration(
-                        color: point.value == maxValue
-                            ? Theme.of(context).colorScheme.primary
-                            : const Color(0xFFDDF5DC),
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(3),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      point.label,
-                      style: Theme.of(context).textTheme.labelSmall,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }).toList(),
-      ),
     );
   }
 }

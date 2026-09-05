@@ -132,6 +132,24 @@ void main() {
       expect(afterLogout.isAuthenticated, isFalse);
       expect(afterLogout.products, hasLength(1));
       expect(afterLogout.sales, hasLength(1));
+
+      // Deleting a product also clears its cart reference and keeps
+      // historical receipt and debt snapshots after the next app launch.
+      afterLogout.addToCart(afterLogout.products.single);
+      final deleted = afterLogout.products.single;
+      afterLogout.deleteProduct(deleted);
+      expect(afterLogout.cartLines, isEmpty);
+      expect(afterLogout.cartTotal, 0);
+      afterLogout.addToCart(deleted);
+      expect(afterLogout.cartLines, isEmpty);
+      await afterLogout.persistenceSettled;
+      final afterDelete = AppStore.forApp(storage: storage);
+      await afterDelete.initialize();
+      expect(afterDelete.products, isEmpty);
+      expect(afterDelete.sales.single.total, 50);
+      expect(afterDelete.sales.single.items.single.productName, 'Rice');
+      expect(afterDelete.customers.single.balance, 30);
+      expect(afterDelete.customers.single.ledger, hasLength(2));
     } finally {
       await directory.delete(recursive: true);
     }
