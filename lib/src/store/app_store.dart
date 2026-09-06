@@ -30,6 +30,8 @@ class AppStore extends ChangeNotifier {
 
   bool get isAuthenticated => currentUserName != null;
   bool get hasLocalAccount => _account != null;
+  String? get registeredOwnerName =>
+      _account == null ? null : '${_account!['name']}';
   bool get isLocalStorageEnabled => storage != null;
   Future<void> get persistenceSettled => _persistenceQueue;
 
@@ -90,6 +92,15 @@ class AppStore extends ChangeNotifier {
     final normalized = name.trim();
     _account ??= {'name': normalized};
     currentUserName = '${_account!['name']}';
+    notifyListeners();
+    return _saveNow();
+  }
+
+  Future<String?> renameOwner(String name) async {
+    final normalized = name.trim();
+    if (normalized.isEmpty) return 'Enter a store name.';
+    if (_account == null) return 'No store is registered on this phone yet.';
+    _account!['name'] = normalized;
     notifyListeners();
     return _saveNow();
   }
