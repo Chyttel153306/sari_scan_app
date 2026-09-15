@@ -201,10 +201,10 @@ class _SalesTrendChartState extends State<SalesTrendChart> {
                                                                     .topCenter,
                                                                 colors: [
                                                                   Color(
-                                                                    0xFF059669,
+                                                                    0xFF2E7D53,
                                                                   ),
                                                                   Color(
-                                                                    0xFF34D399,
+                                                                    0xFF3E9C6F,
                                                                   ),
                                                                 ],
                                                               )
@@ -217,7 +217,7 @@ class _SalesTrendChartState extends State<SalesTrendChart> {
                                                                         maximum)
                                                             ? null
                                                             : const Color(
-                                                                0xFFCBD5E1,
+                                                                0xFFD3DBD5,
                                                               ),
                                                         borderRadius:
                                                             const BorderRadius.vertical(

@@ -12,12 +12,17 @@ class BrandMark extends StatelessWidget {
     height: size,
     decoration: BoxDecoration(
       gradient: AppTheme.brandGradient,
-      borderRadius: BorderRadius.circular(size * .27),
-      boxShadow: const [
+      borderRadius: BorderRadius.circular(size * .3),
+      boxShadow: [
         BoxShadow(
-          color: Color(0x26059669),
+          color: AppTheme.emeraldDeep.withValues(alpha: .35),
           blurRadius: 18,
-          offset: Offset(0, 6),
+          offset: const Offset(0, 7),
+        ),
+        BoxShadow(
+          color: Colors.white.withValues(alpha: .6),
+          blurRadius: 10,
+          offset: const Offset(-3, -3),
         ),
       ],
     ),
@@ -29,6 +34,8 @@ class BrandMark extends StatelessWidget {
   );
 }
 
+/// A soft rounded pill, gently lifted off the page with a matching-tint
+/// shadow instead of a hard outline.
 class StatusPill extends StatelessWidget {
   const StatusPill(
     this.text, {
@@ -43,11 +50,17 @@ class StatusPill extends StatelessWidget {
   final IconData? icon;
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
     decoration: BoxDecoration(
       color: background,
       borderRadius: BorderRadius.circular(99),
-      border: Border.all(color: color.withValues(alpha: .16)),
+      boxShadow: [
+        BoxShadow(
+          color: color.withValues(alpha: .18),
+          blurRadius: 8,
+          offset: const Offset(0, 3),
+        ),
+      ],
     ),
     child: Row(
       mainAxisSize: MainAxisSize.min,
@@ -92,6 +105,10 @@ class SectionHeading extends StatelessWidget {
   );
 }
 
+/// The headline metric card. Kept as a deep, glassy accent block (its own
+/// dark-green gradient) rather than the pale neumorphic base, but its
+/// shadow is now a soft double-cast — a warm dark shadow below and a faint
+/// highlight above — so it still reads as "raised" off the lighter page.
 class MetricHero extends StatelessWidget {
   const MetricHero({
     super.key,
@@ -111,14 +128,19 @@ class MetricHero extends StatelessWidget {
       gradient: const LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-        colors: [Color(0xFF065F46), Color(0xFF064E3B), AppTheme.ink],
+        colors: [AppTheme.emeraldDeep, Color(0xFF215C40), AppTheme.ink],
       ),
-      borderRadius: BorderRadius.circular(24),
-      boxShadow: const [
+      borderRadius: BorderRadius.circular(26),
+      boxShadow: [
         BoxShadow(
-          color: Color(0x1A064E3B),
+          color: AppTheme.baseDark,
           blurRadius: 20,
-          offset: Offset(0, 8),
+          offset: const Offset(6, 8),
+        ),
+        BoxShadow(
+          color: Colors.white.withValues(alpha: .7),
+          blurRadius: 16,
+          offset: const Offset(-5, -5),
         ),
       ],
     ),
@@ -127,13 +149,13 @@ class MetricHero extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(icon, color: const Color(0xFF6EE7B7), size: 18),
+            Icon(icon, color: const Color(0xFF8FE3B9), size: 18),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
                 label.toUpperCase(),
                 style: const TextStyle(
-                  color: Color(0xFFA7F3D0),
+                  color: Color(0xFFC3F0D8),
                   fontSize: 11,
                   letterSpacing: 1,
                   fontWeight: FontWeight.w600,
@@ -158,7 +180,7 @@ class MetricHero extends StatelessWidget {
           style: const TextStyle(
             fontFamily: 'PlusJakartaSans',
             fontSize: 11,
-            color: Color(0xFFD1FAE5),
+            color: Color(0xFFDCF5E6),
           ),
           child: footer,
         ),
@@ -183,13 +205,16 @@ class EmptyState extends StatelessWidget {
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        // A gently sunken circular badge — a diagonal gradient stands in
+        // for an inner shadow, giving the icon a "pressed into the page"
+        // feel that pairs with the raised cards around it.
         Container(
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            color: AppTheme.mint,
-            borderRadius: BorderRadius.circular(22),
+            gradient: AppTheme.insetGradient,
+            shape: BoxShape.circle,
           ),
-          child: Icon(icon, color: AppTheme.emerald, size: 30),
+          child: Icon(icon, color: AppTheme.emeraldDeep, size: 30),
         ),
         const SizedBox(height: 16),
         Text(

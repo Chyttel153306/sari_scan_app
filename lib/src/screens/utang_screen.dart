@@ -167,7 +167,7 @@ class _UtangScreenState extends State<UtangScreen> {
                                 alignment: Alignment.center,
                                 decoration: BoxDecoration(
                                   color: customer.balance > 0
-                                      ? const Color(0xFFFFFBEB)
+                                      ? AppTheme.warnBg
                                       : AppTheme.mint,
                                   borderRadius: BorderRadius.circular(14),
                                 ),
@@ -187,7 +187,7 @@ class _UtangScreenState extends State<UtangScreen> {
                                     fontWeight: FontWeight.w800,
                                     fontSize: 13,
                                     color: customer.balance > 0
-                                        ? const Color(0xFFB45309)
+                                        ? AppTheme.warn
                                         : AppTheme.emerald,
                                   ),
                                 ),
@@ -240,10 +240,10 @@ class _UtangScreenState extends State<UtangScreen> {
                                     StatusPill(
                                       customer.balance > 0 ? 'Pending' : 'Paid',
                                       color: customer.balance > 0
-                                          ? const Color(0xFFB45309)
+                                          ? AppTheme.warn
                                           : AppTheme.emerald,
                                       background: customer.balance > 0
-                                          ? const Color(0xFFFFFBEB)
+                                          ? AppTheme.warnBg
                                           : AppTheme.mint,
                                     ),
                                   ],
@@ -399,24 +399,27 @@ class CustomerLedgerScreen extends StatelessWidget {
               )
             else
               ...customer.ledger.map(
-                (entry) => Card(
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      child: Icon(
-                        entry.type == LedgerEntryType.credit
-                            ? Icons.add_rounded
-                            : Icons.remove_rounded,
+                (entry) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Card(
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        child: Icon(
+                          entry.type == LedgerEntryType.credit
+                              ? Icons.add_rounded
+                              : Icons.remove_rounded,
+                        ),
                       ),
-                    ),
-                    title: Text(entry.note),
-                    subtitle: Text(shortDateTime(entry.createdAt)),
-                    trailing: Text(
-                      '${entry.type == LedgerEntryType.credit ? '+' : '-'}${money(entry.amount)}',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        color: entry.type == LedgerEntryType.credit
-                            ? Theme.of(context).colorScheme.error
-                            : Theme.of(context).colorScheme.primary,
+                      title: Text(entry.note),
+                      subtitle: Text(shortDateTime(entry.createdAt)),
+                      trailing: Text(
+                        '${entry.type == LedgerEntryType.credit ? '+' : '-'}${money(entry.amount)}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          color: entry.type == LedgerEntryType.credit
+                              ? Theme.of(context).colorScheme.error
+                              : Theme.of(context).colorScheme.primary,
+                        ),
                       ),
                     ),
                   ),

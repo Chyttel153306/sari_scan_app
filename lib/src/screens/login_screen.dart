@@ -94,10 +94,10 @@ class _LoginScreenState extends State<LoginScreen> {
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Registered store name'),
+        title: const Text('Registered Store Name'),
         content: Text(
           name.isEmpty
-              ? 'No store name is registered on this phone yet.'
+              ? "Register your Store's name."
               : 'Your store is registered as "$name".',
         ),
         actions: [
@@ -173,7 +173,7 @@ class _LoginScreenState extends State<LoginScreen> {
             center: Alignment(0, -.7),
             radius: 1.2,
             colors: [
-              Color(0xFFD1FAE5),
+              Color.fromARGB(255, 209, 250, 229),
               Color(0xFFF8FAFC),
             ],
           ),
@@ -216,6 +216,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 34),
                     Card(
+                      color: const Color.fromARGB(198, 255, 255, 255),
                       child: Padding(
                         padding: const EdgeInsets.all(24),
                         child: Form(
@@ -399,7 +400,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 8),
                     Text(
                       widget.store.storageError ??
-                          'Offline mode: all store data stays on this phone.',
+                          'Offline mode: all stored data stays on this phone.',
                       textAlign: TextAlign.center,
                       style: Theme.of(context)
                           .textTheme

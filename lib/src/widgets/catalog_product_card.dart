@@ -32,8 +32,7 @@ class CatalogProductCard extends StatelessWidget {
     return Card(
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: const BorderSide(color: AppTheme.border),
+        borderRadius: BorderRadius.circular(18),
       ),
       child: InkWell(
         onTap: inventory ? (product.isArchived ? null : onEdit) : onAdd,
@@ -80,7 +79,7 @@ class CatalogProductCard extends StatelessWidget {
                         background: unavailable
                             ? colors.errorContainer
                             : product.isLowStock
-                            ? const Color(0xFFFFFBEB)
+                            ? AppTheme.warnBg
                             : AppTheme.mint,
                       ),
                     ),
@@ -90,7 +89,9 @@ class CatalogProductCard extends StatelessWidget {
                       right: 8,
                       top: 8,
                       child: Material(
-                        color: const Color(0xFF047857),
+                        color: AppTheme.emeraldDeep,
+                        elevation: 3,
+                        shadowColor: AppTheme.baseDark,
                         shape: const CircleBorder(),
                         child: PopupMenuButton<String>(
                           tooltip: 'Product options',
@@ -161,7 +162,7 @@ class CatalogProductCard extends StatelessWidget {
                 money(product.price).replaceFirst(RegExp(r'\.00$'), ''),
                 scaleDown: false,
                 style: productPriceStyle(context).copyWith(
-                  color: unavailable ? AppTheme.muted : const Color(0xFF047857),
+                  color: unavailable ? AppTheme.muted : AppTheme.emeraldDeep,
                 ),
               ),
             ),

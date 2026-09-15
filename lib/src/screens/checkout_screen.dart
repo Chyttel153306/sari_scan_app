@@ -267,6 +267,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           children: [
                             ActionChip(
                               label: const Text('Exact'),
+                              labelStyle: const TextStyle(color: Colors.black),
                               onPressed: () => setState(
                                 () => _cashController.text = total
                                     .toStringAsFixed(2),
@@ -277,6 +278,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                 .map(
                                   (value) => ActionChip(
                                     label: Text(money(value)),
+                                    labelStyle: const TextStyle(color: Colors.black),
                                     onPressed: () => setState(
                                       () => _cashController.text = value
                                           .toStringAsFixed(2),
@@ -404,19 +406,24 @@ class _PaymentOption extends StatelessWidget {
   Widget build(BuildContext context) => Semantics(
     button: true,
     selected: selected,
-    child: Material(
-      color: selected ? AppTheme.mint : Colors.white,
-      shape: RoundedRectangleBorder(
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 150),
+      decoration: BoxDecoration(
+        color: selected ? AppTheme.mint : AppTheme.base,
         borderRadius: BorderRadius.circular(18),
-        side: BorderSide(
-          color: selected ? AppTheme.emerald : AppTheme.border,
-          width: selected ? 1.5 : 1,
-        ),
+        // Selected reads as "pressed in" (no raised shadow, thin accent
+        // ring); idle reads as raised, poppable off the page.
+        boxShadow: selected ? const [] : AppTheme.raisedShadows(distance: 4, blur: 10),
+        border: selected
+            ? Border.all(color: AppTheme.emerald.withValues(alpha: .45), width: 1.2)
+            : null,
       ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Padding(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(18),
+          child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -450,6 +457,7 @@ class _PaymentOption extends StatelessWidget {
                 style: const TextStyle(fontSize: 10, color: AppTheme.muted),
               ),
             ],
+          ),
           ),
         ),
       ),

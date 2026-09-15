@@ -3,36 +3,76 @@ import 'package:flutter/foundation.dart';
 
 import '../models/models.dart';
 import '../models/sales_trend.dart';
+import '../services/firebase_sync_service.dart';
 import '../services/local_storage_service.dart';
 
-class AppStore extends ChangeNotifier {
-  AppStore({List<Product>? products, List<Customer>? customers, this.storage})
-    : products = products ?? [],
-      customers = customers ?? [];
+/// The outcome of a cloud sync operation, surfaced to the UI so it can show
+/// a confirmation or an error without the store needing to throw.
+class CloudSyncResult {
+  const CloudSyncResult.success(this.syncCode) : error = null;
+  const CloudSyncResult.failure(this.error) : syncCode = null;
 
-  factory AppStore.forApp({LocalStorageService? storage}) {
-    return AppStore(storage: storage);
+  final String? syncCode;
+  final String? error;
+
+  bool get isSuccess => error == null;
+}
+
+class AppStore extends ChangeNotifier {
+  AppStore({
+    List<Product>? products,
+    List<Customer>? customers,
+    this.storage,
+    this.cloudSync,
+    double? markupPercent,
+  }) : products = products ?? [],
+       customers = customers ?? [],
+       markupPercent = markupPercent ?? _defaultMarkupPercent;
+
+  factory AppStore.forApp({
+    LocalStorageService? storage,
+    FirebaseSyncService? cloudSync,
+  }) {
+    return AppStore(storage: storage, cloudSync: cloudSync);
   }
 
   static const _dataVersion = 2;
+
+  // Default markup applied on top of a product's cost price to suggest a
+  // selling price. Configurable from the Settings screen and persisted
+  // alongside the rest of the store's data.
+  static const _defaultMarkupPercent = 10.0;
 
   final List<Product> products;
   final List<Customer> customers;
   final List<SaleRecord> sales = [];
   final Map<String, int> _cart = {};
   final LocalStorageService? storage;
+
+  // Optional: lets multiple phones for the same store manually push/pull
+  // their data through Firebase. Entirely separate from [storage] — the
+  // app is fully usable offline whether or not this is configured.
+  final FirebaseSyncService? cloudSync;
+
   Future<void> _persistenceQueue = Future.value();
 
   String? currentUserName;
   String? storageError;
   bool isLoading = false;
   Map<String, dynamic>? _account;
+  double markupPercent;
+
+  // Cloud sync state, persisted locally so the pairing survives app
+  // restarts without needing to sync again.
+  String? syncCode;
+  DateTime? lastSyncedAt;
 
   bool get isAuthenticated => currentUserName != null;
   bool get hasLocalAccount => _account != null;
   String? get registeredOwnerName =>
       _account == null ? null : '${_account!['name']}';
   bool get isLocalStorageEnabled => storage != null;
+  bool get isCloudSyncAvailable => cloudSync != null;
   Future<void> get persistenceSettled => _persistenceQueue;
 
   List<Product> get activeProducts =>
@@ -55,6 +95,11 @@ class AppStore extends ChangeNotifier {
 
   double get totalOutstanding =>
       customers.fold(0, (total, customer) => total + customer.balance);
+
+  /// Suggested selling price for a given cost price, using the current
+  /// markup percentage (cost + markup%).
+  double suggestedSellingPrice(double costPrice) =>
+      costPrice * (1 + markupPercent / 100);
 
   Future<void> initialize() async {
     if (storage == null) return;
@@ -101,6 +146,14 @@ class AppStore extends ChangeNotifier {
     if (normalized.isEmpty) return 'Enter a store name.';
     if (_account == null) return 'No store is registered on this phone yet.';
     _account!['name'] = normalized;
+    notifyListeners();
+    return _saveNow();
+  }
+
+  /// Updates the default markup percentage used to suggest selling prices.
+  Future<String?> updateMarkupPercent(double percent) async {
+    if (percent < 0) return 'Enter 0 or more.';
+    markupPercent = percent;
     notifyListeners();
     return _saveNow();
   }
@@ -318,6 +371,141 @@ class AppStore extends ChangeNotifier {
         .toList();
   }
 
+  // ---------------------------------------------------------------------
+  // Cloud sync (Firebase). All of these are manual, triggered only from
+  // the Sync button in Settings — nothing here runs automatically, and
+  // the app works fully offline whether or not any of this is ever used.
+  // ---------------------------------------------------------------------
+
+  /// Creates a brand-new cloud store from this phone's current data and
+  /// returns the sync code other phones can use to join it.
+  Future<CloudSyncResult> startCloudSync() async {
+    final cloud = cloudSync;
+    if (cloud == null) {
+      return const CloudSyncResult.failure('Cloud sync is not available.');
+    }
+    try {
+      final code = await cloud.createSyncCode(_snapshot());
+      syncCode = code;
+      lastSyncedAt = DateTime.now();
+      notifyListeners();
+      await _saveNow();
+      return CloudSyncResult.success(code);
+    } catch (error) {
+      return CloudSyncResult.failure('Could not start cloud sync: $error');
+    }
+  }
+
+  /// Joins an existing cloud store using a code from another phone,
+  /// replacing this phone's local data with the cloud copy.
+  Future<CloudSyncResult> joinCloudSync(String code) async {
+    final cloud = cloudSync;
+    if (cloud == null) {
+      return const CloudSyncResult.failure('Cloud sync is not available.');
+    }
+    final normalized = code.trim().toUpperCase();
+    if (normalized.isEmpty) {
+      return const CloudSyncResult.failure('Enter a sync code.');
+    }
+    try {
+      final remote = await cloud.downloadSnapshot(normalized);
+      if (remote == null) {
+        return const CloudSyncResult.failure(
+          'No store was found for that sync code.',
+        );
+      }
+      _applyCloudSnapshot(remote.data);
+      syncCode = normalized;
+      lastSyncedAt = remote.updatedAt ?? DateTime.now();
+      notifyListeners();
+      await _saveNow();
+      return CloudSyncResult.success(normalized);
+    } catch (error) {
+      return CloudSyncResult.failure('Could not join cloud sync: $error');
+    }
+  }
+
+  /// Pushes this phone's current data to the cloud, overwriting it.
+  Future<CloudSyncResult> pushToCloud() async {
+    final cloud = cloudSync;
+    final code = syncCode;
+    if (cloud == null) {
+      return const CloudSyncResult.failure('Cloud sync is not available.');
+    }
+    if (code == null) {
+      return const CloudSyncResult.failure('Set up sync first.');
+    }
+    try {
+      final uploadedAt = await cloud.uploadSnapshot(
+        syncCode: code,
+        snapshot: _snapshot(),
+      );
+      lastSyncedAt = uploadedAt;
+      notifyListeners();
+      await _saveNow();
+      return CloudSyncResult.success(code);
+    } catch (error) {
+      return CloudSyncResult.failure('Could not upload to cloud: $error');
+    }
+  }
+
+  /// Pulls the latest cloud data down, overwriting this phone's data.
+  Future<CloudSyncResult> pullFromCloud() async {
+    final cloud = cloudSync;
+    final code = syncCode;
+    if (cloud == null) {
+      return const CloudSyncResult.failure('Cloud sync is not available.');
+    }
+    if (code == null) {
+      return const CloudSyncResult.failure('Set up sync first.');
+    }
+    try {
+      final remote = await cloud.downloadSnapshot(code);
+      if (remote == null) {
+        return const CloudSyncResult.failure(
+          'No cloud data was found for this sync code.',
+        );
+      }
+      _applyCloudSnapshot(remote.data);
+      lastSyncedAt = remote.updatedAt ?? DateTime.now();
+      notifyListeners();
+      await _saveNow();
+      return CloudSyncResult.success(code);
+    } catch (error) {
+      return CloudSyncResult.failure('Could not download from cloud: $error');
+    }
+  }
+
+  /// Unlinks this phone from cloud sync without deleting the cloud data,
+  /// so other phones using the same code are unaffected.
+  Future<void> leaveCloudSync() async {
+    syncCode = null;
+    lastSyncedAt = null;
+    notifyListeners();
+    await _saveNow();
+  }
+
+  /// Applies a downloaded cloud snapshot on top of this phone's data.
+  /// Unlike [_restoreSnapshot] (used for local-disk loading at launch),
+  /// this never touches the current login session or account name, since
+  /// those are meant to stay tied to this specific phone.
+  void _applyCloudSnapshot(Map<String, dynamic> snapshot) {
+    products
+      ..clear()
+      ..addAll(_mapRows(snapshot['products']).map(_productFromRow));
+    customers
+      ..clear()
+      ..addAll(_mapRows(snapshot['customers']).map(_customerFromRow));
+    sales
+      ..clear()
+      ..addAll(_mapRows(snapshot['sales']).map(_saleFromRow));
+    final markup = snapshot['markup_percent'];
+    if (markup is num) markupPercent = markup.toDouble();
+    // The cart references product identities that may no longer match
+    // after a full data swap, so it's safest to clear it.
+    _cart.clear();
+  }
+
   bool _restoreSnapshot(Map<String, dynamic> snapshot) {
     final version = (snapshot['version'] as num?)?.toInt() ?? 0;
     if (version < 1 || version > _dataVersion) {
@@ -330,6 +518,15 @@ class AppStore extends ChangeNotifier {
     } else {
       _account = null;
     }
+
+    markupPercent =
+        (snapshot['markup_percent'] as num?)?.toDouble() ??
+        _defaultMarkupPercent;
+    syncCode = snapshot['sync_code']?.toString();
+    final lastSyncedRaw = snapshot['last_synced_at'];
+    lastSyncedAt = lastSyncedRaw == null
+        ? null
+        : DateTime.tryParse('$lastSyncedRaw');
 
     products
       ..clear()
@@ -358,6 +555,9 @@ class AppStore extends ChangeNotifier {
   Map<String, dynamic> _snapshot() => {
     'version': _dataVersion,
     'account': _account,
+    'markup_percent': markupPercent,
+    'sync_code': syncCode,
+    'last_synced_at': lastSyncedAt?.toIso8601String(),
     'products': products.map(_productToRow).toList(),
     'customers': customers.map(_customerToRow).toList(),
     'sales': sales.map(_saleToRow).toList(),

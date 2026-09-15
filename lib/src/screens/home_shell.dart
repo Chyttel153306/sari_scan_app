@@ -6,6 +6,7 @@ import '../widgets/design_system.dart';
 import 'pos_screen.dart';
 import 'products_screen.dart';
 import 'reports_screen.dart';
+import 'settings_screen.dart';
 import 'utang_screen.dart';
 
 class HomeShell extends StatefulWidget {
@@ -65,6 +66,25 @@ class _HomeShellState extends State<HomeShell> {
                   widget.store.storageError ??
                       'Products, customers, sales, and utang work offline.',
                 ),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(
+                  Icons.settings_outlined,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                title: const Text('Settings'),
+                subtitle: const Text('Pricing markup, store name, and more'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => SettingsScreen(store: widget.store),
+                    ),
+                  );
+                },
               ),
               const SizedBox(height: 8),
               OutlinedButton.icon(
@@ -148,8 +168,15 @@ class _HomeShellState extends State<HomeShell> {
         ),
       ),
       bottomNavigationBar: DecoratedBox(
-        decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: AppTheme.border)),
+        decoration: BoxDecoration(
+          color: AppTheme.base,
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.baseDark.withValues(alpha: .7),
+              blurRadius: 18,
+              offset: const Offset(0, -4),
+            ),
+          ],
         ),
         child: NavigationBar(
           selectedIndex: _index,

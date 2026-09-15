@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "404506820642",
+    "project_id": "sariscan",
+    "storage_bucket": "sariscan.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:404506820642:android:4a07501395bb0cf1cc4a7b",
+        "android_client_info": {
+          "package_name": "com.example.sari_scan_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCbJuHMJdLsrlj90HTfPA_GDTg-Kf5ttgI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

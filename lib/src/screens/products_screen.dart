@@ -234,6 +234,27 @@ class _ProductDialogState extends State<ProductDialog> {
   late final TextEditingController _stock;
   late final TextEditingController _barcode;
   late final TextEditingController _threshold;
+
+  // Category dropdown-in-textfield plumbing: a FocusNode so we know when the
+  // field is active, a LayerLink/OverlayEntry pair so the suggestion list is
+  // drawn as a floating panel anchored right under the field, and a width
+  // captured from LayoutBuilder so that panel matches the field's width.
+  final _categoryFocusNode = FocusNode();
+  final _categoryLayerLink = LayerLink();
+  OverlayEntry? _categoryOverlayEntry;
+  bool _categoryDropdownOpen = false;
+  double _categoryFieldWidth = 0;
+
+  // Selling-price auto-calculation: for a brand-new product, the price is
+  // suggested automatically from the cost price plus the store's markup
+  // percentage, recalculated live as the cost changes. Once the person
+  // types directly into the price field it "unlocks" and stops being
+  // overwritten, until they tap the refresh accessory to resync it. When
+  // editing an existing product, the saved price is left alone by default
+  // since it may not have come from the current markup setting.
+  bool _priceManuallyEdited = false;
+  bool _syncingPrice = false;
+
   String? _imagePath;
   bool _saving = false;
 
@@ -257,10 +278,20 @@ class _ProductDialogState extends State<ProductDialog> {
       text: '${product?.lowStockThreshold ?? 5}',
     );
     _imagePath = product?.imagePath;
+
+    // Editing an existing product keeps its saved price untouched unless
+    // the person explicitly asks to resync it via the refresh icon.
+    _priceManuallyEdited = product != null;
+
+    _categoryFocusNode.addListener(() {
+      if (!_categoryFocusNode.hasFocus) _closeCategoryDropdown();
+    });
+    _cost.addListener(_handleCostChanged);
   }
 
   @override
   void dispose() {
+    _cost.removeListener(_handleCostChanged);
     _name.dispose();
     _category.dispose();
     _cost.dispose();
@@ -268,8 +299,129 @@ class _ProductDialogState extends State<ProductDialog> {
     _stock.dispose();
     _barcode.dispose();
     _threshold.dispose();
+    _categoryOverlayEntry?.remove();
+    _categoryFocusNode.dispose();
     super.dispose();
   }
+
+  /// Existing categories drawn from current inventory, deduped and sorted.
+  List<String> get _existingCategories {
+    final categories = widget.store.products
+        .map((product) => product.category.trim())
+        .where((category) => category.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+    return categories;
+  }
+
+  List<String> _filteredCategories(String query) {
+    final categories = _existingCategories;
+    final normalized = query.trim().toLowerCase();
+    if (normalized.isEmpty) return categories;
+    return categories
+        .where((category) => category.toLowerCase().contains(normalized))
+        .toList();
+  }
+
+  void _selectCategory(String category) {
+    _category.text = category;
+    _category.selection = TextSelection.collapsed(offset: category.length);
+    _closeCategoryDropdown();
+  }
+
+  void _openCategoryDropdown() {
+    if (_categoryOverlayEntry != null) {
+      _categoryOverlayEntry!.markNeedsBuild();
+      return;
+    }
+    _categoryOverlayEntry = OverlayEntry(
+      builder: (context) {
+        final categories = _filteredCategories(_category.text);
+        return Positioned(
+          width: _categoryFieldWidth,
+          child: CompositedTransformFollower(
+            link: _categoryLayerLink,
+            showWhenUnlinked: false,
+            offset: const Offset(0, 58),
+            child: Material(
+              elevation: 4,
+              borderRadius: BorderRadius.circular(14),
+              clipBehavior: Clip.antiAlias,
+              child: categories.isEmpty
+                  ? Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Text(
+                        _category.text.trim().isEmpty
+                            ? 'No categories yet. Type to create one.'
+                            : 'No match — keep typing to create '
+                                  '"${_category.text.trim()}".',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.muted,
+                        ),
+                      ),
+                    )
+                  : ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 220),
+                      child: ListView.builder(
+                        padding: EdgeInsets.zero,
+                        shrinkWrap: true,
+                        itemCount: categories.length,
+                        itemBuilder: (context, index) {
+                          final option = categories[index];
+                          return ListTile(
+                            dense: true,
+                            title: Text(option),
+                            onTap: () => _selectCategory(option),
+                          );
+                        },
+                      ),
+                    ),
+            ),
+          ),
+        );
+      },
+    );
+    Overlay.of(context).insert(_categoryOverlayEntry!);
+    setState(() => _categoryDropdownOpen = true);
+  }
+
+  void _closeCategoryDropdown() {
+    _categoryOverlayEntry?.remove();
+    _categoryOverlayEntry = null;
+    if (mounted && _categoryDropdownOpen) {
+      setState(() => _categoryDropdownOpen = false);
+    } else {
+      _categoryDropdownOpen = false;
+    }
+  }
+
+  void _toggleCategoryDropdown() {
+    if (_categoryOverlayEntry != null) {
+      _closeCategoryDropdown();
+    } else {
+      _categoryFocusNode.requestFocus();
+      _openCategoryDropdown();
+    }
+  }
+
+  /// Recomputes the selling price from the current cost price and the
+  /// store's markup percentage, unless the person has taken manual control
+  /// of the price field.
+  void _handleCostChanged() {
+    if (_priceManuallyEdited) return;
+    final cost = double.tryParse(_cost.text);
+    if (cost == null || cost < 0) return;
+    final computed = widget.store.suggestedSellingPrice(cost);
+    _syncingPrice = true;
+    _price.text = computed.toStringAsFixed(2);
+    _syncingPrice = false;
+  }
+
+  String _formatPercent(double value) => value == value.roundToDouble()
+      ? value.toStringAsFixed(0)
+      : value.toStringAsFixed(1);
 
   Future<void> _save() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
@@ -389,7 +541,7 @@ class _ProductDialogState extends State<ProductDialog> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           CircleAvatar(
-                            backgroundColor: const Color(0xFFF4F8F3),
+                            backgroundColor: AppTheme.mint,
                             child: Icon(
                               Icons.add_a_photo_outlined,
                               color: colors.primary,
@@ -428,14 +580,49 @@ class _ProductDialogState extends State<ProductDialog> {
               validator: _required,
             ),
             const SizedBox(height: 14),
-            TextFormField(
-              controller: _category,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(
-                labelText: 'Category',
-                hintText: 'e.g., Drinks, Snacks, Canned Goods',
-              ),
-              validator: _required,
+            // Category field: looks like a normal text field with a
+            // dropdown-arrow accessory on the right. Tapping the icon (or
+            // the field itself) opens a floating list of existing
+            // categories anchored just below it — tap one to pick it, or
+            // keep typing to create a brand-new category if none fits.
+            LayoutBuilder(
+              builder: (context, constraints) {
+                _categoryFieldWidth = constraints.maxWidth;
+                return CompositedTransformTarget(
+                  link: _categoryLayerLink,
+                  child: TextFormField(
+                    controller: _category,
+                    focusNode: _categoryFocusNode,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: InputDecoration(
+                      labelText: 'Category',
+                      hintText: 'e.g., Drinks, Snacks, Canned Goods',
+                      suffixIcon: IconButton(
+                        tooltip: 'Choose existing category',
+                        onPressed: _toggleCategoryDropdown,
+                        icon: AnimatedRotation(
+                          turns: _categoryDropdownOpen ? 0.5 : 0,
+                          duration: const Duration(milliseconds: 150),
+                          child: const Icon(Icons.expand_more_rounded),
+                        ),
+                      ),
+                    ),
+                    validator: _required,
+                    onTap: () {
+                      if (_categoryOverlayEntry == null) {
+                        _openCategoryDropdown();
+                      }
+                    },
+                    onChanged: (_) {
+                      if (_categoryOverlayEntry != null) {
+                        _categoryOverlayEntry!.markNeedsBuild();
+                      } else {
+                        _openCategoryDropdown();
+                      }
+                    },
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 14),
             Row(
@@ -461,10 +648,29 @@ class _ProductDialogState extends State<ProductDialog> {
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Selling Price',
                       prefixText: '₱ ',
+                      helperText: _priceManuallyEdited
+                          ? 'Manually set'
+                          : 'Auto: cost + '
+                                '${_formatPercent(widget.store.markupPercent)}%',
+                      helperMaxLines: 2,
+                      suffixIcon: IconButton(
+                        tooltip: 'Recalculate from cost + markup',
+                        onPressed: () {
+                          setState(() => _priceManuallyEdited = false);
+                          _handleCostChanged();
+                        },
+                        icon: const Icon(Icons.refresh_rounded, size: 20),
+                      ),
                     ),
+                    onChanged: (_) {
+                      if (_syncingPrice) return;
+                      if (!_priceManuallyEdited) {
+                        setState(() => _priceManuallyEdited = true);
+                      }
+                    },
                     validator: _money,
                   ),
                 ),

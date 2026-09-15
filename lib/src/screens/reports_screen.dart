@@ -300,7 +300,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       label: 'Utang',
                       value: utang,
                       total: total,
-                      color: const Color(0xFF8C6800),
+                      color: AppTheme.warn,
                     ),
                   ],
                 ),
