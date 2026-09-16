@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'firebase_options.dart';
 import 'src/app.dart';
 import 'src/services/firebase_sync_service.dart';
+import 'src/services/imgbb_image_service.dart';
 import 'src/services/local_storage_service.dart';
 import 'src/store/app_store.dart';
 
@@ -24,8 +25,23 @@ Future<void> main() async {
     cloudSync = null;
   }
 
+  // ImgBB (a free image host, no credit card required) mirrors product
+  // photos so they show up on every synced phone, not just the one that
+  // took the picture. Pass a real key at build/run time, e.g.:
+  //   flutter run --dart-define=IMGBB_API_KEY=your_key_here
+  // With no key configured, photo sync is simply skipped — everything
+  // else (products, sales, utang) keeps syncing normally through Firebase.
+  const imgbbApiKey = String.fromEnvironment('IMGBB_API_KEY');
+  final imageSync = imgbbApiKey.isEmpty
+      ? null
+      : ImgbbImageService(apiKey: imgbbApiKey);
+
   final storage = await LocalStorageService.create();
-  final store = AppStore.forApp(storage: storage, cloudSync: cloudSync);
+  final store = AppStore.forApp(
+    storage: storage,
+    cloudSync: cloudSync,
+    imageSync: imageSync,
+  );
   await store.initialize();
   runApp(SariScanApp(store: store));
 }

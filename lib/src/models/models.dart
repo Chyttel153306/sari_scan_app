@@ -13,6 +13,7 @@ class Product {
     required this.stock,
     this.costPrice,
     this.imagePath,
+    this.imageUrl,
     this.barcode = '',
     this.lowStockThreshold = 5,
     this.isArchived = false,
@@ -25,6 +26,12 @@ class Product {
   int stock;
   double? costPrice;
   String? imagePath;
+
+  /// Public ImgBB URL for this product's photo, if it was uploaded during
+  /// [AppStore.importProductImage]. Carried in the synced snapshot so
+  /// other phones can re-download the photo — [imagePath] alone only
+  /// ever resolves on the phone that originally took the picture.
+  String? imageUrl;
   String barcode;
   int lowStockThreshold;
   bool isArchived;

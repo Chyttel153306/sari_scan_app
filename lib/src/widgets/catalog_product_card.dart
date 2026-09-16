@@ -133,6 +133,36 @@ class CatalogProductCard extends StatelessWidget {
                         ),
                       ),
                     ),
+                  // Small photo-sync status badge — inventory view only,
+                  // since it's a management/debug affordance rather than
+                  // something a cashier needs to see at checkout.
+                  if (inventory && product.imagePath != null)
+                    Positioned(
+                      left: 8,
+                      bottom: 8,
+                      child: Tooltip(
+                        message: product.imageUrl != null
+                            ? 'Photo will sync to other phones'
+                            : 'Photo is local to this phone only',
+                        child: Container(
+                          padding: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: .92),
+                            shape: BoxShape.circle,
+                            boxShadow: AppTheme.softShadows(),
+                          ),
+                          child: Icon(
+                            product.imageUrl != null
+                                ? Icons.cloud_done_outlined
+                                : Icons.cloud_off_outlined,
+                            size: 14,
+                            color: product.imageUrl != null
+                                ? AppTheme.emerald
+                                : AppTheme.muted,
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),

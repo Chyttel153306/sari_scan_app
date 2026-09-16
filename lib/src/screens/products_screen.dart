@@ -576,11 +576,15 @@ class _ProductDialogState extends State<ProductDialog> {
   Future<void> _save() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _saving = true);
-    String? storedImagePath;
+    // Imports the photo locally and, when an image sync service is
+    // configured, uploads it to ImgBB so it can follow this product to
+    // other phones on the next cloud sync.
+    ImportedProductImage imported;
     try {
-      storedImagePath = await widget.store.importProductImage(
+      imported = await widget.store.importProductImage(
         _imagePath,
         previousPath: widget.product?.imagePath,
+        previousUrl: widget.product?.imageUrl,
       );
     } catch (error) {
       if (!mounted) return;
@@ -598,7 +602,8 @@ class _ProductDialogState extends State<ProductDialog> {
       costPrice: double.parse(_cost.text),
       price: double.parse(_price.text),
       stock: widget.product == null ? int.parse(_stock.text) : null,
-      imagePath: storedImagePath,
+      imagePath: imported.path,
+      imageUrl: imported.url,
       barcode: _barcode.text,
       lowStockThreshold: int.parse(_threshold.text),
     );

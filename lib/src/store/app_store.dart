@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 
 import '../models/models.dart';
 import '../models/sales_trend.dart';
 import '../services/firebase_sync_service.dart';
+import '../services/imgbb_image_service.dart';
 import '../services/local_storage_service.dart';
 
 /// The outcome of a cloud sync operation, surfaced to the UI so it can show
@@ -18,12 +21,25 @@ class CloudSyncResult {
   bool get isSuccess => error == null;
 }
 
+/// The local file and (optionally) the public ImgBB URL produced when a
+/// product photo is imported. [url] is null when no image sync service is
+/// configured, or when uploading failed — the photo still works fine on
+/// this phone either way, it just won't follow the product to other
+/// phones over sync.
+class ImportedProductImage {
+  const ImportedProductImage({required this.path, required this.url});
+
+  final String? path;
+  final String? url;
+}
+
 class AppStore extends ChangeNotifier {
   AppStore({
     List<Product>? products,
     List<Customer>? customers,
     this.storage,
     this.cloudSync,
+    this.imageSync,
     double? markupPercent,
   }) : products = products ?? [],
        customers = customers ?? [],
@@ -32,8 +48,13 @@ class AppStore extends ChangeNotifier {
   factory AppStore.forApp({
     LocalStorageService? storage,
     FirebaseSyncService? cloudSync,
+    ImgbbImageService? imageSync,
   }) {
-    return AppStore(storage: storage, cloudSync: cloudSync);
+    return AppStore(
+      storage: storage,
+      cloudSync: cloudSync,
+      imageSync: imageSync,
+    );
   }
 
   static const _dataVersion = 3;
@@ -55,6 +76,12 @@ class AppStore extends ChangeNotifier {
   // app is fully usable offline whether or not this is configured.
   final FirebaseSyncService? cloudSync;
 
+  // Optional: mirrors product photos to ImgBB so they follow the product
+  // across phones during cloud sync, since [storage]'s local file paths
+  // only ever resolve on the phone that took the picture. Photos still
+  // work fine locally with this left unset — they just won't sync.
+  final ImgbbImageService? imageSync;
+
   Future<void> _persistenceQueue = Future.value();
 
   String? currentUserName;
@@ -74,7 +101,14 @@ class AppStore extends ChangeNotifier {
       _account == null ? null : '${_account!['name']}';
   bool get isLocalStorageEnabled => storage != null;
   bool get isCloudSyncAvailable => cloudSync != null;
+  bool get isImageSyncAvailable => imageSync != null;
   Future<void> get persistenceSettled => _persistenceQueue;
+
+  @override
+  void dispose() {
+    imageSync?.dispose();
+    super.dispose();
+  }
 
   List<Product> get activeProducts =>
       products.where((product) => !product.isArchived).toList();
@@ -116,6 +150,7 @@ class AppStore extends ChangeNotifier {
         final migrated = _restoreSnapshot(snapshot);
         if (migrated) await storage!.saveSnapshot(_snapshot());
       }
+      await _hydrateMissingProductImages();
       storageError = null;
     } catch (error) {
       storageError = 'Local data could not be loaded: $error';
@@ -208,6 +243,7 @@ class AppStore extends ChangeNotifier {
     int? stock,
     double? costPrice,
     String? imagePath,
+    String? imageUrl,
     required String barcode,
     required int lowStockThreshold,
   }) {
@@ -224,6 +260,7 @@ class AppStore extends ChangeNotifier {
         stock: stock,
         costPrice: costPrice,
         imagePath: imagePath,
+        imageUrl: imageUrl,
         barcode: barcode.trim(),
         lowStockThreshold: lowStockThreshold,
       );
@@ -249,6 +286,7 @@ class AppStore extends ChangeNotifier {
         ..price = price
         ..costPrice = costPrice
         ..imagePath = imagePath
+        ..imageUrl = imageUrl
         ..barcode = barcode.trim()
         ..lowStockThreshold = lowStockThreshold;
       savedProduct = existing;
@@ -334,18 +372,36 @@ class AppStore extends ChangeNotifier {
     return customer;
   }
 
-  Future<String?> importProductImage(
+  /// Imports [sourcePath] into local storage and, if an image sync
+  /// service is configured, uploads it so the photo can follow the
+  /// product to other phones during cloud sync. When the photo is
+  /// unchanged from [previousPath], [previousUrl] is carried over as-is
+  /// rather than re-uploading. Upload failures are swallowed — the photo
+  /// still works fine on this phone, it just won't sync this time.
+  Future<ImportedProductImage> importProductImage(
     String? sourcePath, {
     String? previousPath,
+    String? previousUrl,
   }) async {
     if (sourcePath == null || sourcePath.isEmpty) {
       await storage?.deleteProductImage(previousPath);
-      return null;
+      return const ImportedProductImage(path: null, url: null);
     }
-    if (sourcePath == previousPath || storage == null) return sourcePath;
+    if (sourcePath == previousPath || storage == null) {
+      return ImportedProductImage(path: sourcePath, url: previousUrl);
+    }
     final imported = await storage!.importProductImage(sourcePath);
     await storage!.deleteProductImage(previousPath);
-    return imported;
+
+    String? uploadedUrl;
+    if (imageSync != null) {
+      try {
+        uploadedUrl = await imageSync!.uploadImage(imported);
+      } catch (_) {
+        uploadedUrl = null;
+      }
+    }
+    return ImportedProductImage(path: imported, url: uploadedUrl);
   }
 
   String? recordPayment(Customer customer, double amount) {
@@ -485,6 +541,7 @@ class AppStore extends ChangeNotifier {
         );
       }
       _applyCloudSnapshot(remote.data);
+      await _hydrateMissingProductImages();
       syncCode = normalized;
       lastSyncedAt = remote.updatedAt ?? DateTime.now();
       notifyListeners();
@@ -537,6 +594,7 @@ class AppStore extends ChangeNotifier {
         );
       }
       _applyCloudSnapshot(remote.data);
+      await _hydrateMissingProductImages();
       lastSyncedAt = remote.updatedAt ?? DateTime.now();
       notifyListeners();
       await _saveNow();
@@ -553,6 +611,31 @@ class AppStore extends ChangeNotifier {
     lastSyncedAt = null;
     notifyListeners();
     await _saveNow();
+  }
+
+  /// Downloads and locally caches any product photo whose local file is
+  /// missing but whose [Product.imageUrl] is set — the normal situation
+  /// right after joining or pulling a cloud snapshot on a phone that
+  /// never had that photo locally, or on first launch after restoring an
+  /// old local snapshot whose image files no longer exist. Failures are
+  /// left in place silently; [ProductImage] falls back to a placeholder
+  /// until the next successful sync.
+  Future<void> _hydrateMissingProductImages() async {
+    final sync = imageSync;
+    final localStorage = storage;
+    if (sync == null || localStorage == null) return;
+    for (final product in products) {
+      final url = product.imageUrl;
+      if (url == null || url.isEmpty) continue;
+      final path = product.imagePath;
+      if (path != null && await File(path).exists()) continue;
+      try {
+        final bytes = await sync.downloadImageBytes(url);
+        product.imagePath = await localStorage.saveImageBytes(bytes);
+      } catch (_) {
+        // Leave imagePath as-is; try again on the next sync.
+      }
+    }
   }
 
   /// Applies a downloaded cloud snapshot on top of this phone's data.
@@ -653,6 +736,7 @@ class AppStore extends ChangeNotifier {
       stock: (row['stock'] as num).toInt(),
       costPrice: (row['cost_price'] as num?)?.toDouble(),
       imagePath: row['image_path']?.toString(),
+      imageUrl: row['image_url']?.toString(),
       barcode: row['barcode']?.toString() ?? '',
       lowStockThreshold: (row['low_stock_threshold'] as num?)?.toInt() ?? 5,
       isArchived: row['is_archived'] == true,
@@ -726,6 +810,7 @@ class AppStore extends ChangeNotifier {
     'stock': product.stock,
     'cost_price': product.costPrice,
     'image_path': product.imagePath,
+    'image_url': product.imageUrl,
     'barcode': product.barcode,
     'low_stock_threshold': product.lowStockThreshold,
     'is_archived': product.isArchived,

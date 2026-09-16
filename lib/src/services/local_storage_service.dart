@@ -73,6 +73,26 @@ class LocalStorageService {
     return destination.path;
   }
 
+  /// Saves raw image bytes — e.g. downloaded from a synced product's
+  /// ImgBB URL — into the same local product_images folder used by
+  /// [importProductImage], so a downloaded photo displays and gets
+  /// cleaned up exactly like a locally-imported one.
+  Future<String> saveImageBytes(
+    List<int> bytes, {
+    String extension = '.jpg',
+  }) async {
+    final imageDirectory = Directory(
+      '${file.parent.path}${Platform.pathSeparator}product_images',
+    );
+    await imageDirectory.create(recursive: true);
+    final destination = File(
+      '${imageDirectory.path}${Platform.pathSeparator}'
+      '${DateTime.now().microsecondsSinceEpoch}$extension',
+    );
+    await destination.writeAsBytes(bytes, flush: true);
+    return destination.path;
+  }
+
   Future<void> deleteProductImage(String? imagePath) async {
     if (imagePath == null || imagePath.isEmpty) return;
     final image = File(imagePath);
