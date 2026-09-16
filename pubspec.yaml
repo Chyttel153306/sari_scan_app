@@ -13,6 +13,7 @@ dependencies:
   flutter:
     sdk: flutter
   google_mlkit_text_recognition: ^0.16.0
+  http: ^1.2.2
   image_picker: ^1.2.3
   local_auth: ^3.0.2
   mobile_scanner: ^7.4.0
