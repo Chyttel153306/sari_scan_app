@@ -261,11 +261,11 @@ class _UtangScreenState extends State<UtangScreen> {
             Positioned(
               right: 16,
               bottom: 16,
-              child: FloatingActionButton.extended(
+              child: FloatingActionButton(
                 heroTag: 'addCustomer',
+                tooltip: 'Add customer',
                 onPressed: _addCustomer,
-                icon: const Icon(Icons.person_add_alt_1),
-                label: const Text('Add customer'),
+                child: const Icon(Icons.person_add_alt_1),
               ),
             ),
           ],

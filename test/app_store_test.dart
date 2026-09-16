@@ -92,6 +92,43 @@ void main() {
     expect(store.customers, isEmpty);
   });
 
+  test(
+    'product edits preserve stock and stock-in additions are audited',
+    () async {
+      final product = Product(
+        id: '1',
+        name: 'Rice',
+        category: 'Food',
+        price: 50,
+        stock: 8,
+      );
+      final store = AppStore(products: [product]);
+      await store.openSecureSession('Owner');
+
+      store.saveProduct(
+        existing: product,
+        name: 'Premium Rice',
+        category: 'Food',
+        price: 55,
+        stock: 0,
+        barcode: '',
+        lowStockThreshold: 2,
+      );
+      expect(product.stock, 8);
+
+      final addition = store.addStock(
+        product: product,
+        quantity: 12,
+        note: 'Supplier invoice #1234',
+      );
+
+      expect(product.stock, 20);
+      expect(store.stockAdditionsFor(product), [addition]);
+      expect(addition.addedBy, 'Owner');
+      expect(addition.note, 'Supplier invoice #1234');
+    },
+  );
+
   test('persists the account and all store records on the device', () async {
     final directory = await Directory.systemTemp.createTemp('sariscan_test_');
     final storage = LocalStorageService(File('${directory.path}/store.json'));
@@ -109,6 +146,11 @@ void main() {
         barcode: '123',
         lowStockThreshold: 2,
       );
+      store.addStock(
+        product: product,
+        quantity: 5,
+        note: 'Supplier invoice #99',
+      );
       final customer = store.addCustomer('Maria', '09171234567');
       store.addToCart(product);
       store.completeSale(paymentType: PaymentType.utang, customer: customer);
@@ -122,7 +164,11 @@ void main() {
       expect(restored.validateOwnerName('Owner'), isNull);
       expect(await restored.openSecureSession('Owner'), isNull);
       expect(restored.products.single.name, 'Rice');
-      expect(restored.products.single.stock, 9);
+      expect(restored.products.single.stock, 14);
+      expect(restored.stockAdditions, hasLength(2));
+      expect(restored.stockAdditions.first.quantity, 5);
+      expect(restored.stockAdditions.first.note, 'Supplier invoice #99');
+      expect(restored.stockAdditions.first.addedBy, 'Owner');
       expect(restored.customers.single.balance, 30);
       expect(restored.sales.single.items.single.productName, 'Rice');
 

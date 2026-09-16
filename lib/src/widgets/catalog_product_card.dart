@@ -15,6 +15,7 @@ class CatalogProductCard extends StatelessWidget {
     this.inventory = false,
     this.onAdd,
     this.onEdit,
+    this.onAddStock,
     this.onArchive,
     this.onDelete,
   });
@@ -22,6 +23,7 @@ class CatalogProductCard extends StatelessWidget {
   final bool inventory;
   final VoidCallback? onAdd;
   final VoidCallback? onEdit;
+  final VoidCallback? onAddStock;
   final VoidCallback? onArchive;
   final VoidCallback? onDelete;
 
@@ -31,9 +33,7 @@ class CatalogProductCard extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return Card(
       clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: InkWell(
         onTap: inventory ? (product.isArchived ? null : onEdit) : onAdd,
         child: Column(
@@ -102,10 +102,16 @@ class CatalogProductCard extends StatelessWidget {
                           ),
                           onSelected: (value) {
                             if (value == 'edit') onEdit?.call();
+                            if (value == 'addStock') onAddStock?.call();
                             if (value == 'archive') onArchive?.call();
                             if (value == 'delete') onDelete?.call();
                           },
                           itemBuilder: (_) => [
+                            if (!product.isArchived)
+                              const PopupMenuItem(
+                                value: 'addStock',
+                                child: Text('Add stock'),
+                              ),
                             if (!product.isArchived)
                               const PopupMenuItem(
                                 value: 'edit',
@@ -169,9 +175,9 @@ class CatalogProductCard extends StatelessWidget {
             const SizedBox(width: 2),
             if (inventory)
               IconButton.filledTonal(
-                tooltip: 'Edit product',
-                onPressed: product.isArchived ? null : onEdit,
-                icon: const Icon(Icons.edit_outlined, size: 19),
+                tooltip: 'Add stock',
+                onPressed: product.isArchived ? null : onAddStock,
+                icon: const Icon(Icons.add_box_outlined, size: 19),
                 style: IconButton.styleFrom(
                   backgroundColor: AppTheme.mint,
                   foregroundColor: const Color(0xFF047857),

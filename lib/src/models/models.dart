@@ -32,6 +32,28 @@ class Product {
   bool get isLowStock => stock <= lowStockThreshold;
 }
 
+/// A stock-in record is kept separately from the product so stock additions
+/// remain reviewable even after the product details change.
+class StockAddition {
+  const StockAddition({
+    required this.id,
+    required this.productId,
+    required this.productName,
+    required this.quantity,
+    required this.createdAt,
+    required this.addedBy,
+    required this.note,
+  });
+
+  final String id;
+  final String productId;
+  final String productName;
+  final int quantity;
+  final DateTime createdAt;
+  final String addedBy;
+  final String note;
+}
+
 class CartLine {
   const CartLine({required this.product, required this.quantity});
 

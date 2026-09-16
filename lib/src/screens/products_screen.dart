@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../models/models.dart';
@@ -49,6 +50,21 @@ class _ProductsScreenState extends State<ProductsScreen> {
       context,
       MaterialPageRoute(
         builder: (_) => ProductDialog(store: widget.store, product: product),
+      ),
+    );
+  }
+
+  Future<void> _addStock(Product product) async {
+    final addition = await showDialog<StockAddition>(
+      context: context,
+      builder: (_) => AddStockDialog(store: widget.store, product: product),
+    );
+    if (!mounted || addition == null) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '${addition.quantity} added to ${product.name}. Stock: ${product.stock}.',
+        ),
       ),
     );
   }
@@ -184,6 +200,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                         inventory: true,
                         product: product,
                         onEdit: () => _editProduct(product),
+                        onAddStock: () => _addStock(product),
                         onArchive: () => widget.store.toggleArchive(product),
                         onDelete: () => _deleteProduct(product),
                       );
@@ -195,17 +212,148 @@ class _ProductsScreenState extends State<ProductsScreen> {
           Positioned(
             right: 16,
             bottom: 16,
-            child: FloatingActionButton.extended(
+            child: FloatingActionButton(
               heroTag: 'addProduct',
               onPressed: _editProduct,
-              icon: const Icon(Icons.add),
-              label: const Text('Add product'),
+              child: const Icon(Icons.add),
             ),
           ),
         ],
       ),
     );
   }
+}
+
+class AddStockDialog extends StatefulWidget {
+  const AddStockDialog({super.key, required this.store, required this.product});
+
+  final AppStore store;
+  final Product product;
+
+  @override
+  State<AddStockDialog> createState() => _AddStockDialogState();
+}
+
+class _AddStockDialogState extends State<AddStockDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _quantity = TextEditingController();
+  final _note = TextEditingController();
+
+  @override
+  void dispose() {
+    _quantity.dispose();
+    _note.dispose();
+    super.dispose();
+  }
+
+  int get _quantityValue => int.tryParse(_quantity.text) ?? 0;
+
+  void _save() {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    final addition = widget.store.addStock(
+      product: widget.product,
+      quantity: _quantityValue,
+      note: _note.text,
+    );
+    Navigator.pop(context, addition);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final history = widget.store.stockAdditionsFor(widget.product);
+    final afterStock = widget.product.stock + _quantityValue;
+    return AlertDialog(
+      title: const Text('Add stock'),
+      content: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(widget.product.name),
+              const SizedBox(height: 4),
+              Text(
+                'Current stock: ${widget.product.stock}  •  After adding: $afterStock',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 18),
+              TextFormField(
+                controller: _quantity,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: const InputDecoration(
+                  labelText: 'Quantity received',
+                ),
+                onChanged: (_) => setState(() {}),
+                validator: (value) {
+                  final quantity = int.tryParse(value ?? '');
+                  return quantity == null || quantity <= 0
+                      ? 'Enter a quantity greater than zero.'
+                      : null;
+                },
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _note,
+                textCapitalization: TextCapitalization.sentences,
+                maxLines: 2,
+                decoration: const InputDecoration(
+                  labelText: 'Delivery / invoice note',
+                  hintText: 'e.g., Supplier invoice #1234',
+                ),
+                validator: (value) => value == null || value.trim().isEmpty
+                    ? 'Add a delivery or invoice note for the audit trail.'
+                    : null,
+              ),
+              if (history.isNotEmpty) ...[
+                const SizedBox(height: 20),
+                const Text(
+                  'STOCK-IN HISTORY',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 6),
+                for (final entry in history)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 5),
+                    child: Text(
+                      '+${entry.quantity} • ${_formatDateTime(entry.createdAt)}\n'
+                      '${entry.note} • ${entry.addedBy}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton.icon(
+          onPressed: _save,
+          icon: const Icon(Icons.add_box_outlined),
+          label: const Text('Add stock'),
+        ),
+      ],
+    );
+  }
+
+  String _formatDateTime(DateTime value) {
+    final local = value.toLocal();
+    final minute = local.minute.toString().padLeft(2, '0');
+    return '${local.month}/${local.day}/${local.year} ${local.hour}:$minute';
+  }
+}
+
+class _PhotoSuggestion {
+  const _PhotoSuggestion({this.name, this.category});
+
+  final String? name;
+  final String? category;
 }
 
 class ProductDialog extends StatefulWidget {
@@ -256,6 +404,7 @@ class _ProductDialogState extends State<ProductDialog> {
   bool _syncingPrice = false;
 
   String? _imagePath;
+  bool _recognizingPhoto = false;
   bool _saving = false;
 
   @override
@@ -306,12 +455,13 @@ class _ProductDialogState extends State<ProductDialog> {
 
   /// Existing categories drawn from current inventory, deduped and sorted.
   List<String> get _existingCategories {
-    final categories = widget.store.products
-        .map((product) => product.category.trim())
-        .where((category) => category.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort();
+    final categories =
+        widget.store.products
+            .map((product) => product.category.trim())
+            .where((category) => category.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
     return categories;
   }
 
@@ -447,7 +597,7 @@ class _ProductDialogState extends State<ProductDialog> {
       category: _category.text,
       costPrice: double.parse(_cost.text),
       price: double.parse(_price.text),
-      stock: int.parse(_stock.text),
+      stock: widget.product == null ? int.parse(_stock.text) : null,
       imagePath: storedImagePath,
       barcode: _barcode.text,
       lowStockThreshold: int.parse(_threshold.text),
@@ -484,8 +634,137 @@ class _ProductDialogState extends State<ProductDialog> {
       maxWidth: 1400,
       imageQuality: 86,
     );
-    if (photo != null && mounted) setState(() => _imagePath = photo.path);
+    if (photo == null || !mounted) return;
+    setState(() => _imagePath = photo.path);
+    await _suggestProductDetailsFromPhoto(photo.path);
   }
+
+  /// Uses on-device OCR to suggest details from packaging. The editable
+  /// fields remain the source of truth when the text is incomplete.
+  Future<void> _suggestProductDetailsFromPhoto(String path) async {
+    setState(() => _recognizingPhoto = true);
+    final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
+    try {
+      final recognized = await recognizer.processImage(
+        InputImage.fromFilePath(path),
+      );
+      final suggestion = _suggestFromRecognizedText(recognized);
+      if (!mounted || _imagePath != path) return;
+
+      var applied = false;
+      setState(() {
+        if (_name.text.trim().isEmpty && suggestion.name != null) {
+          _name.text = suggestion.name!;
+          applied = true;
+        }
+        if (_category.text.trim().isEmpty && suggestion.category != null) {
+          _category.text = suggestion.category!;
+          applied = true;
+        }
+        _recognizingPhoto = false;
+      });
+      if (applied && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Product details suggested from the photo. Please review them.',
+            ),
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted && _imagePath == path) {
+        setState(() => _recognizingPhoto = false);
+      }
+    } finally {
+      await recognizer.close();
+    }
+  }
+
+  _PhotoSuggestion _suggestFromRecognizedText(RecognizedText recognized) {
+    final lines = [
+      for (final block in recognized.blocks)
+        for (final line in block.lines) _cleanRecognizedLine(line.text),
+    ].whereType<String>().toList();
+    if (lines.isEmpty) return const _PhotoSuggestion();
+
+    final allText = lines.join(' ').toLowerCase();
+    Product? matchingProduct;
+    var bestMatchCount = 0;
+    for (final product in widget.store.products) {
+      final productName = product.name.trim().toLowerCase();
+      if (productName.isEmpty) continue;
+      if (allText.contains(productName)) {
+        matchingProduct = product;
+        break;
+      }
+      final matches = productName
+          .split(RegExp(r'\s+'))
+          .where((word) => word.length >= 3 && allText.contains(word))
+          .length;
+      if (matches >= 2 && matches > bestMatchCount) {
+        matchingProduct = product;
+        bestMatchCount = matches;
+      }
+    }
+    if (matchingProduct != null) {
+      return _PhotoSuggestion(
+        name: matchingProduct.name,
+        category: matchingProduct.category,
+      );
+    }
+
+    final inferredCategory = _inferCategory(allText);
+    final nameLines = lines
+        .where(
+          (line) =>
+              line.length >= 3 &&
+              line.length <= 50 &&
+              RegExp(r'[A-Za-z]').hasMatch(line) &&
+              !RegExp(
+                r'^\D*\d+[\d.,]*\s*(g|kg|ml|l|oz|pcs?)?\D*$',
+                caseSensitive: false,
+              ).hasMatch(line),
+        )
+        .take(2)
+        .toList();
+    final name = nameLines.isEmpty ? null : _toTitleCase(nameLines.join(' '));
+    return _PhotoSuggestion(name: name, category: inferredCategory);
+  }
+
+  String? _cleanRecognizedLine(String value) {
+    final clean = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return clean.isEmpty ? null : clean;
+  }
+
+  String? _inferCategory(String text) {
+    for (final category in _existingCategories) {
+      final normalized = category.trim().toLowerCase();
+      if (normalized.length >= 3 && text.contains(normalized)) return category;
+    }
+    const categories = {
+      'Drinks': ['drink', 'juice', 'coffee', 'tea', 'soda', 'water', 'milk'],
+      'Snacks': ['snack', 'chips', 'biscuit', 'cookie', 'cracker', 'candy'],
+      'Canned Goods': ['canned', 'sardine', 'tuna', 'corned beef'],
+      'Pantry': ['rice', 'noodle', 'pasta', 'flour', 'sugar', 'salt'],
+      'Personal Care': ['shampoo', 'soap', 'toothpaste', 'lotion'],
+      'Household': ['detergent', 'bleach', 'dishwashing', 'tissue'],
+    };
+    for (final entry in categories.entries) {
+      if (entry.value.any(text.contains)) return entry.key;
+    }
+    return null;
+  }
+
+  String _toTitleCase(String value) => value
+      .toLowerCase()
+      .split(RegExp(r'\s+'))
+      .map(
+        (word) => word.isEmpty
+            ? word
+            : '${word[0].toUpperCase()}${word.substring(1)}',
+      )
+      .join(' ');
 
   Future<void> _scanBarcode() async {
     final barcode = await Navigator.push<String>(
@@ -569,6 +848,20 @@ class _ProductDialogState extends State<ProductDialog> {
                       ),
               ),
             ),
+            if (_recognizingPhoto)
+              const Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: Row(
+                  children: [
+                    SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    SizedBox(width: 8),
+                    Text('Reading product label…'),
+                  ],
+                ),
+              ),
             const SizedBox(height: 24),
             TextFormField(
               controller: _name,
@@ -680,17 +973,30 @@ class _ProductDialogState extends State<ProductDialog> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: TextFormField(
-                    controller: _stock,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    decoration: const InputDecoration(
-                      labelText: 'Current Stock',
+                if (isNew)
+                  Expanded(
+                    child: TextFormField(
+                      controller: _stock,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      decoration: const InputDecoration(
+                        labelText: 'Initial Stock',
+                      ),
+                      validator: _wholeNumber,
                     ),
-                    validator: _wholeNumber,
+                  )
+                else
+                  Expanded(
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: 'Current Stock',
+                      ),
+                      child: Text(
+                        '${widget.product!.stock}',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    ),
                   ),
-                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: TextFormField(
@@ -705,6 +1011,16 @@ class _ProductDialogState extends State<ProductDialog> {
                 ),
               ],
             ),
+            if (!isNew)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'Stock can only be increased from Add stock so each delivery is recorded.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colors.onSurfaceVariant,
+                  ),
+                ),
+              ),
             const SizedBox(height: 14),
             TextFormField(
               controller: _barcode,

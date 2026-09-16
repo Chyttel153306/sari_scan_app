@@ -50,7 +50,7 @@ void main() {
         home: Scaffold(body: UtangScreen(store: store)),
       ),
     );
-    await tester.tap(find.text('Add customer'));
+    await tester.tap(find.byTooltip('Add customer'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).at(1), ' Maria ');
     await tester.enterText(find.byType(TextField).at(2), '09171234567');
@@ -73,7 +73,7 @@ void main() {
         home: Scaffold(body: UtangScreen(store: store)),
       ),
     );
-    await tester.tap(find.text('Add customer'));
+    await tester.tap(find.byTooltip('Add customer'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Add customer'));
     await tester.pumpAndSettle();

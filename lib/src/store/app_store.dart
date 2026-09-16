@@ -36,7 +36,7 @@ class AppStore extends ChangeNotifier {
     return AppStore(storage: storage, cloudSync: cloudSync);
   }
 
-  static const _dataVersion = 2;
+  static const _dataVersion = 3;
 
   // Default markup applied on top of a product's cost price to suggest a
   // selling price. Configurable from the Settings screen and persisted
@@ -46,6 +46,7 @@ class AppStore extends ChangeNotifier {
   final List<Product> products;
   final List<Customer> customers;
   final List<SaleRecord> sales = [];
+  final List<StockAddition> stockAdditions = [];
   final Map<String, int> _cart = {};
   final LocalStorageService? storage;
 
@@ -77,6 +78,10 @@ class AppStore extends ChangeNotifier {
 
   List<Product> get activeProducts =>
       products.where((product) => !product.isArchived).toList();
+
+  List<StockAddition> stockAdditionsFor(Product product) => stockAdditions
+      .where((addition) => addition.productId == product.id)
+      .toList();
 
   List<CartLine> get cartLines => _cart.entries
       .map(
@@ -200,7 +205,7 @@ class AppStore extends ChangeNotifier {
     required String name,
     required String category,
     required double price,
-    required int stock,
+    int? stock,
     double? costPrice,
     String? imagePath,
     required String barcode,
@@ -208,6 +213,9 @@ class AppStore extends ChangeNotifier {
   }) {
     late final Product savedProduct;
     if (existing == null) {
+      if (stock == null) {
+        throw ArgumentError.value(stock, 'stock', 'Initial stock is required.');
+      }
       savedProduct = Product(
         id: _nextId(products.map((product) => product.id)),
         name: name.trim(),
@@ -220,12 +228,25 @@ class AppStore extends ChangeNotifier {
         lowStockThreshold: lowStockThreshold,
       );
       products.add(savedProduct);
+      if (stock > 0) {
+        stockAdditions.insert(
+          0,
+          StockAddition(
+            id: _nextId(stockAdditions.map((entry) => entry.id)),
+            productId: savedProduct.id,
+            productName: savedProduct.name,
+            quantity: stock,
+            createdAt: DateTime.now(),
+            addedBy: currentUserName ?? 'Unknown user',
+            note: 'Initial stock when product was created',
+          ),
+        );
+      }
     } else {
       existing
         ..name = name.trim()
         ..category = category.trim()
         ..price = price
-        ..stock = stock
         ..costPrice = costPrice
         ..imagePath = imagePath
         ..barcode = barcode.trim()
@@ -235,6 +256,55 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
     _queueSave();
     return savedProduct;
+  }
+
+  /// Adds received stock without allowing a product edit to overwrite the
+  /// current count. Every addition has a required source note and audit trail.
+  StockAddition addStock({
+    required Product product,
+    required int quantity,
+    required String note,
+  }) {
+    if (!products.contains(product)) {
+      throw ArgumentError.value(
+        product,
+        'product',
+        'Product is not in inventory.',
+      );
+    }
+    if (product.isArchived) {
+      throw ArgumentError.value(
+        product,
+        'product',
+        'Archived products cannot receive stock.',
+      );
+    }
+    if (quantity <= 0) {
+      throw ArgumentError.value(
+        quantity,
+        'quantity',
+        'Quantity must be greater than zero.',
+      );
+    }
+    final normalizedNote = note.trim();
+    if (normalizedNote.isEmpty) {
+      throw ArgumentError.value(note, 'note', 'A stock-in note is required.');
+    }
+
+    final addition = StockAddition(
+      id: _nextId(stockAdditions.map((entry) => entry.id)),
+      productId: product.id,
+      productName: product.name,
+      quantity: quantity,
+      createdAt: DateTime.now(),
+      addedBy: currentUserName ?? 'Unknown user',
+      note: normalizedNote,
+    );
+    product.stock += quantity;
+    stockAdditions.insert(0, addition);
+    notifyListeners();
+    _queueSave();
+    return addition;
   }
 
   void toggleArchive(Product product) {
@@ -499,6 +569,11 @@ class AppStore extends ChangeNotifier {
     sales
       ..clear()
       ..addAll(_mapRows(snapshot['sales']).map(_saleFromRow));
+    stockAdditions
+      ..clear()
+      ..addAll(
+        _mapRows(snapshot['stock_additions']).map(_stockAdditionFromRow),
+      );
     final markup = snapshot['markup_percent'];
     if (markup is num) markupPercent = markup.toDouble();
     // The cart references product identities that may no longer match
@@ -537,6 +612,11 @@ class AppStore extends ChangeNotifier {
     sales
       ..clear()
       ..addAll(_mapRows(snapshot['sales']).map(_saleFromRow));
+    stockAdditions
+      ..clear()
+      ..addAll(
+        _mapRows(snapshot['stock_additions']).map(_stockAdditionFromRow),
+      );
 
     // Authentication is intentionally session-only. Every fresh app launch
     // must pass the phone's system security prompt again.
@@ -561,6 +641,7 @@ class AppStore extends ChangeNotifier {
     'products': products.map(_productToRow).toList(),
     'customers': customers.map(_customerToRow).toList(),
     'sales': sales.map(_saleToRow).toList(),
+    'stock_additions': stockAdditions.map(_stockAdditionToRow).toList(),
   };
 
   Product _productFromRow(Map<String, dynamic> row) {
@@ -609,6 +690,18 @@ class AppStore extends ChangeNotifier {
       quantity: (row['quantity'] as num).toInt(),
       unitPrice: (row['unit_price'] as num).toDouble(),
       unitCost: (row['unit_cost'] as num?)?.toDouble(),
+    );
+  }
+
+  StockAddition _stockAdditionFromRow(Map<String, dynamic> row) {
+    return StockAddition(
+      id: '${row['id']}',
+      productId: '${row['product_id']}',
+      productName: '${row['product_name']}',
+      quantity: (row['quantity'] as num).toInt(),
+      createdAt: DateTime.parse('${row['created_at']}'),
+      addedBy: row['added_by']?.toString() ?? 'Unknown user',
+      note: row['note']?.toString() ?? '',
     );
   }
 
@@ -663,6 +756,16 @@ class AppStore extends ChangeNotifier {
     'amount_received': sale.amountReceived,
     'change_amount': sale.change,
     'customer_id': sale.customerId,
+  };
+
+  Map<String, dynamic> _stockAdditionToRow(StockAddition addition) => {
+    'id': addition.id,
+    'product_id': addition.productId,
+    'product_name': addition.productName,
+    'quantity': addition.quantity,
+    'created_at': addition.createdAt.toIso8601String(),
+    'added_by': addition.addedBy,
+    'note': addition.note,
   };
 
   Map<String, dynamic> _saleItemToRow(SaleItem item) => {
