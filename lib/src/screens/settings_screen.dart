@@ -23,6 +23,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String? _markupError;
   bool _savingMarkup = false;
   bool _syncing = false;
+  bool _backfillingPhotos = false;
 
   @override
   void initState() {
@@ -86,6 +87,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Store name updated.')),
+    );
+  }
+
+  // -----------------------------------------------------------------
+  // Photo sync (ImgBB)
+  // -----------------------------------------------------------------
+
+  /// Uploads any product photo that predates image sync being set up, so
+  /// existing products (not just newly-added ones) start following their
+  /// photos to other phones too.
+  Future<void> _backfillPhotos() async {
+    setState(() => _backfillingPhotos = true);
+    final count = await widget.store.backfillProductImages();
+    if (!mounted) return;
+    setState(() => _backfillingPhotos = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          count == 0
+              ? 'All photos are already synced.'
+              : '$count photo(s) uploaded — they will now sync to other phones.',
+        ),
+      ),
     );
   }
 
@@ -557,6 +581,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
             ),
+            if (widget.store.isImageSyncAvailable) ...[
+              const SizedBox(height: 24),
+              const SectionHeading(
+                'Photo sync',
+                subtitle: 'Upload photos added before photo sync was set up',
+              ),
+              const SizedBox(height: 12),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        'New product photos upload automatically when you '
+                        'save them. If a product still has a photo from '
+                        "before photo sync was set up, use this to upload "
+                        "it now so it starts following that product to "
+                        'other phones too.',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: AppTheme.muted,
+                          height: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      FilledButton.icon(
+                        onPressed: _backfillingPhotos ? null : _backfillPhotos,
+                        icon: _backfillingPhotos
+                            ? const SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.cloud_upload_outlined),
+                        label: Text(
+                          _backfillingPhotos
+                              ? 'Uploading...'
+                              : 'Upload existing photos now',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 24),
             const SectionHeading(
               'Store account',

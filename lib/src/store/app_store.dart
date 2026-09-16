@@ -374,10 +374,15 @@ class AppStore extends ChangeNotifier {
 
   /// Imports [sourcePath] into local storage and, if an image sync
   /// service is configured, uploads it so the photo can follow the
-  /// product to other phones during cloud sync. When the photo is
-  /// unchanged from [previousPath], [previousUrl] is carried over as-is
-  /// rather than re-uploading. Upload failures are swallowed — the photo
-  /// still works fine on this phone, it just won't sync this time.
+  /// product to other phones during cloud sync. Upload failures are
+  /// swallowed — the photo still works fine on this phone, it just won't
+  /// sync this time.
+  ///
+  /// When the photo is unchanged from [previousPath] but was never
+  /// uploaded (e.g. it was added before image sync was configured, or an
+  /// earlier upload attempt failed), this backfills it by uploading the
+  /// existing local file — so simply re-opening and saving an old
+  /// product is enough to bring its photo into sync.
   Future<ImportedProductImage> importProductImage(
     String? sourcePath, {
     String? previousPath,
@@ -388,7 +393,15 @@ class AppStore extends ChangeNotifier {
       return const ImportedProductImage(path: null, url: null);
     }
     if (sourcePath == previousPath || storage == null) {
-      return ImportedProductImage(path: sourcePath, url: previousUrl);
+      var url = previousUrl;
+      if (url == null && imageSync != null) {
+        try {
+          url = await imageSync!.uploadImage(sourcePath);
+        } catch (_) {
+          url = null;
+        }
+      }
+      return ImportedProductImage(path: sourcePath, url: url);
     }
     final imported = await storage!.importProductImage(sourcePath);
     await storage!.deleteProductImage(previousPath);
@@ -402,6 +415,33 @@ class AppStore extends ChangeNotifier {
       }
     }
     return ImportedProductImage(path: imported, url: uploadedUrl);
+  }
+
+  /// Uploads every existing product photo that hasn't been uploaded yet —
+  /// meant for products added before image sync was configured, so a
+  /// single tap (rather than re-opening and re-saving each product) can
+  /// bring an entire existing catalog's photos into sync. Returns how
+  /// many photos were newly uploaded.
+  Future<int> backfillProductImages() async {
+    final sync = imageSync;
+    if (sync == null) return 0;
+    var uploaded = 0;
+    for (final product in products) {
+      if (product.imageUrl != null) continue;
+      final path = product.imagePath;
+      if (path == null || path.isEmpty) continue;
+      try {
+        product.imageUrl = await sync.uploadImage(path);
+        uploaded++;
+      } catch (_) {
+        // Leave it unsynced; the button can simply be tapped again later.
+      }
+    }
+    if (uploaded > 0) {
+      notifyListeners();
+      await _saveNow();
+    }
+    return uploaded;
   }
 
   String? recordPayment(Customer customer, double amount) {
