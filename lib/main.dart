@@ -1,40 +1,44 @@
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'firebase_options.dart';
 import 'src/app.dart';
-import 'src/services/firebase_sync_service.dart';
-import 'src/services/imgbb_image_service.dart';
 import 'src/services/local_storage_service.dart';
+import 'src/services/supabase_image_service.dart';
+import 'src/services/supabase_sync_service.dart';
 import 'src/store/app_store.dart';
+
+// The project URL and publishable (anon) key are meant to ship inside the
+// app: what protects the data is Row Level Security and the Storage
+// policies, not the secrecy of these two values. Never put the
+// service-role / secret key here. To point a build at another project:
+//   flutter run --dart-define=SUPABASE_URL=... --dart-define=SUPABASE_ANON_KEY=...
+const _supabaseUrl = String.fromEnvironment(
+  'SUPABASE_URL',
+  defaultValue: 'https://uobzpgufatdvctqxtywu.supabase.co',
+);
+const _supabaseAnonKey = String.fromEnvironment(
+  'SUPABASE_ANON_KEY',
+  defaultValue: 'sb_publishable_MfYnja_5n658MMsCcvOVcw_yS2MR9NY',
+);
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Firebase powers optional, manual multi-device sync (see the Sync
-  // button in Settings). The app still works fully offline even if this
-  // fails to initialize, so a Firebase outage or misconfiguration on a
-  // brand-new install should never block the person from using the POS.
-  FirebaseSyncService? cloudSync;
+  // Supabase powers optional, manual multi-device sync (see the Sync
+  // button in Settings) and product photo sync. The app still works fully
+  // offline even if this fails to initialize, so a Supabase outage or
+  // misconfiguration on a brand-new install should never block the person
+  // from using the POS.
+  SupabaseSyncService? cloudSync;
+  SupabaseImageService? imageSync;
   try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-    cloudSync = FirebaseSyncService();
+    await Supabase.initialize(url: _supabaseUrl, publishableKey: _supabaseAnonKey);
+    cloudSync = SupabaseSyncService();
+    imageSync = SupabaseImageService();
   } catch (_) {
     cloudSync = null;
+    imageSync = null;
   }
-
-  // ImgBB (a free image host, no credit card required) mirrors product
-  // photos so they show up on every synced phone, not just the one that
-  // took the picture. Pass a real key at build/run time, e.g.:
-  //   flutter run --dart-define=IMGBB_API_KEY=your_key_here
-  // With no key configured, photo sync is simply skipped — everything
-  // else (products, sales, utang) keeps syncing normally through Firebase.
-  const imgbbApiKey = String.fromEnvironment('IMGBB_API_KEY');
-  final imageSync = imgbbApiKey.isEmpty
-      ? null
-      : ImgbbImageService(apiKey: imgbbApiKey);
 
   final storage = await LocalStorageService.create();
   final store = AppStore.forApp(

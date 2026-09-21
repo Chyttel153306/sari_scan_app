@@ -5,9 +5,9 @@ import 'package:flutter/foundation.dart';
 
 import '../models/models.dart';
 import '../models/sales_trend.dart';
-import '../services/firebase_sync_service.dart';
-import '../services/imgbb_image_service.dart';
 import '../services/local_storage_service.dart';
+import '../services/supabase_image_service.dart';
+import '../services/supabase_sync_service.dart';
 
 /// The outcome of a cloud sync operation, surfaced to the UI so it can show
 /// a confirmation or an error without the store needing to throw.
@@ -21,7 +21,7 @@ class CloudSyncResult {
   bool get isSuccess => error == null;
 }
 
-/// The local file and (optionally) the public ImgBB URL produced when a
+/// The local file and (optionally) the Supabase Storage path produced when a
 /// product photo is imported. [url] is null when no image sync service is
 /// configured, or when uploading failed — the photo still works fine on
 /// this phone either way, it just won't follow the product to other
@@ -47,8 +47,8 @@ class AppStore extends ChangeNotifier {
 
   factory AppStore.forApp({
     LocalStorageService? storage,
-    FirebaseSyncService? cloudSync,
-    ImgbbImageService? imageSync,
+    SupabaseSyncService? cloudSync,
+    SupabaseImageService? imageSync,
   }) {
     return AppStore(
       storage: storage,
@@ -72,15 +72,15 @@ class AppStore extends ChangeNotifier {
   final LocalStorageService? storage;
 
   // Optional: lets multiple phones for the same store manually push/pull
-  // their data through Firebase. Entirely separate from [storage] — the
+  // their data through Supabase. Entirely separate from [storage] — the
   // app is fully usable offline whether or not this is configured.
-  final FirebaseSyncService? cloudSync;
+  final SupabaseSyncService? cloudSync;
 
-  // Optional: mirrors product photos to ImgBB so they follow the product
+  // Optional: mirrors product photos to Supabase Storage so they follow the product
   // across phones during cloud sync, since [storage]'s local file paths
   // only ever resolve on the phone that took the picture. Photos still
   // work fine locally with this left unset — they just won't sync.
-  final ImgbbImageService? imageSync;
+  final SupabaseImageService? imageSync;
 
   Future<void> _persistenceQueue = Future.value();
 
@@ -373,16 +373,19 @@ class AppStore extends ChangeNotifier {
   }
 
   /// Imports [sourcePath] into local storage and, if an image sync
-  /// service is configured, uploads it so the photo can follow the
-  /// product to other phones during cloud sync. Upload failures are
-  /// swallowed — the photo still works fine on this phone, it just won't
-  /// sync this time.
+  /// service is configured and this phone is linked to a cloud store,
+  /// uploads it to Supabase Storage so the photo can follow the product to
+  /// other phones during cloud sync. Upload failures are swallowed — the
+  /// photo still works fine on this phone, it just won't sync this time.
+  ///
+  /// Photos live under the store's sync-code folder, so they can only be
+  /// uploaded once cloud sync has been set up. Photos saved before that are
+  /// picked up later by [backfillProductImages].
   ///
   /// When the photo is unchanged from [previousPath] but was never
-  /// uploaded (e.g. it was added before image sync was configured, or an
-  /// earlier upload attempt failed), this backfills it by uploading the
-  /// existing local file — so simply re-opening and saving an old
-  /// product is enough to bring its photo into sync.
+  /// uploaded, this backfills it by uploading the existing local file.
+  /// A replaced or removed photo also has its old cloud copy deleted
+  /// (best effort).
   Future<ImportedProductImage> importProductImage(
     String? sourcePath, {
     String? previousPath,
@@ -390,48 +393,75 @@ class AppStore extends ChangeNotifier {
   }) async {
     if (sourcePath == null || sourcePath.isEmpty) {
       await storage?.deleteProductImage(previousPath);
+      await _deleteRemoteImage(previousUrl);
       return const ImportedProductImage(path: null, url: null);
     }
     if (sourcePath == previousPath || storage == null) {
-      var url = previousUrl;
-      if (url == null && imageSync != null) {
-        try {
-          url = await imageSync!.uploadImage(sourcePath);
-        } catch (_) {
-          url = null;
-        }
-      }
+      final url = previousUrl ?? await _uploadImageIfLinked(sourcePath);
       return ImportedProductImage(path: sourcePath, url: url);
     }
     final imported = await storage!.importProductImage(sourcePath);
     await storage!.deleteProductImage(previousPath);
-
-    String? uploadedUrl;
-    if (imageSync != null) {
-      try {
-        uploadedUrl = await imageSync!.uploadImage(imported);
-      } catch (_) {
-        uploadedUrl = null;
-      }
-    }
+    await _deleteRemoteImage(previousUrl);
+    final uploadedUrl = await _uploadImageIfLinked(imported);
     return ImportedProductImage(path: imported, url: uploadedUrl);
   }
 
-  /// Uploads every existing product photo that hasn't been uploaded yet —
-  /// meant for products added before image sync was configured, so a
-  /// single tap (rather than re-opening and re-saving each product) can
-  /// bring an entire existing catalog's photos into sync. Returns how
-  /// many photos were newly uploaded.
+  Future<String?> _uploadImageIfLinked(String localPath) async {
+    final sync = imageSync;
+    final code = syncCode;
+    if (sync == null || code == null) return null;
+    try {
+      return await sync.uploadImage(localPath, syncCode: code);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _deleteRemoteImage(String? reference) async {
+    final sync = imageSync;
+    if (sync == null || reference == null || reference.isEmpty) return;
+    try {
+      await sync.deleteImage(reference);
+    } catch (_) {
+      // Best effort: an orphaned cloud file is harmless.
+    }
+  }
+
+  /// Uploads every existing product photo that is not in Supabase Storage
+  /// yet — products whose photo was added before photo sync existed, and
+  /// products still pointing at a legacy ImgBB URL. One tap brings an
+  /// entire existing catalog's photos into sync. Requires this phone to
+  /// be linked to a cloud store. Returns how many photos were uploaded.
   Future<int> backfillProductImages() async {
     final sync = imageSync;
-    if (sync == null) return 0;
+    final code = syncCode;
+    if (sync == null || code == null) return 0;
     var uploaded = 0;
     for (final product in products) {
-      if (product.imageUrl != null) continue;
-      final path = product.imagePath;
-      if (path == null || path.isEmpty) continue;
+      final current = product.imageUrl;
+      final needsUpload =
+          current == null ||
+          current.isEmpty ||
+          SupabaseImageService.isLegacyUrl(current);
+      if (!needsUpload) continue;
       try {
-        product.imageUrl = await sync.uploadImage(path);
+        var path = product.imagePath;
+        final hasLocalFile =
+            path != null && path.isNotEmpty && await File(path).exists();
+        if (!hasLocalFile) {
+          // Only a legacy ImgBB copy exists: fetch it once, keep it
+          // locally, then upload it to Supabase.
+          if (current == null ||
+              !SupabaseImageService.isLegacyUrl(current) ||
+              storage == null) {
+            continue;
+          }
+          final bytes = await sync.downloadImageBytes(current);
+          path = await storage!.saveImageBytes(bytes);
+          product.imagePath = path;
+        }
+        product.imageUrl = await sync.uploadImage(path, syncCode: code);
         uploaded++;
       } catch (_) {
         // Leave it unsynced; the button can simply be tapped again later.
@@ -538,7 +568,7 @@ class AppStore extends ChangeNotifier {
   }
 
   // ---------------------------------------------------------------------
-  // Cloud sync (Firebase). All of these are manual, triggered only from
+  // Cloud sync (Supabase). All of these are manual, triggered only from
   // the Sync button in Settings — nothing here runs automatically, and
   // the app works fully offline whether or not any of this is ever used.
   // ---------------------------------------------------------------------
@@ -574,7 +604,7 @@ class AppStore extends ChangeNotifier {
       return const CloudSyncResult.failure('Enter a sync code.');
     }
     try {
-      final remote = await cloud.downloadSnapshot(normalized);
+      final remote = await cloud.downloadSnapshot(normalized, join: true);
       if (remote == null) {
         return const CloudSyncResult.failure(
           'No store was found for that sync code.',

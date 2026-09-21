@@ -91,13 +91,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   // -----------------------------------------------------------------
-  // Photo sync (ImgBB)
+  // Photo sync (Supabase Storage)
   // -----------------------------------------------------------------
 
   /// Uploads any product photo that predates image sync being set up, so
   /// existing products (not just newly-added ones) start following their
   /// photos to other phones too.
   Future<void> _backfillPhotos() async {
+    if (widget.store.syncCode == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Set up cloud sync first, then upload your photos.'),
+        ),
+      );
+      return;
+    }
     setState(() => _backfillingPhotos = true);
     final count = await widget.store.backfillProductImages();
     if (!mounted) return;
@@ -497,9 +505,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ? 'This phone is not linked to a cloud sync yet. '
                                   'Create a sync code here, then enter that '
                                   'same code on your other phones to keep '
-                                  'them all up to date. Product photos stay '
-                                  'on the phone that added them — only text '
-                                  'data syncs.'
+                                  'them all up to date. Product photos sync '
+                                  'too, once this phone is linked.'
                             : 'This phone is linked with the sync code '
                                   'below. Share it with your other phones '
                                   'for this store.',
