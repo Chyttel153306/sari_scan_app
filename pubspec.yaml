@@ -30,6 +30,9 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/branding/sariscan_logo.png
+    - assets/branding/sariscan_symbol.png
   fonts:
     - family: PlusJakartaSans
       fonts:

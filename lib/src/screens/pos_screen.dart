@@ -195,12 +195,12 @@ class _PosScreenState extends State<PosScreen> {
                           labelStyle: TextStyle(
                             color: _category == category
                                 ? Colors.white
-                                : AppTheme.muted,
+                                : AppTheme.of(context).muted,
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                           ),
                           selected: _category == category,
-                          selectedColor: AppTheme.emerald,
+                          selectedColor: AppTheme.of(context).emerald,
                           showCheckmark: false,
                           padding: const EdgeInsets.symmetric(horizontal: 10),
                           onSelected: (_) =>
@@ -215,9 +215,9 @@ class _PosScreenState extends State<PosScreen> {
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                     child: Text(
                       '${visibleProducts.length} products available',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
-                        color: AppTheme.muted,
+                        color: AppTheme.of(context).muted,
                       ),
                     ),
                   ),
@@ -267,7 +267,7 @@ class _PosScreenState extends State<PosScreen> {
                   child: Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: AppTheme.ink,
+                      gradient: AppTheme.of(context).heroGradient,
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: const [
                         BoxShadow(
@@ -284,7 +284,7 @@ class _PosScreenState extends State<PosScreen> {
                           tooltip: 'View cart',
                           icon: const Icon(
                             Icons.shopping_bag_outlined,
-                            color: Color(0xFF6EE7B7),
+                            color: Colors.white70,
                           ),
                         ),
                         const SizedBox(width: 6),

@@ -1,6 +1,5 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -17,6 +16,13 @@ class ReceiptScreen extends StatelessWidget {
   final SaleRecord sale;
 
   Future<Uint8List> _buildReceiptPdf(PdfPageFormat format) async {
+    final logoData = await rootBundle.load(BrandMark.logoAsset);
+    final logo = pw.MemoryImage(
+      logoData.buffer.asUint8List(
+        logoData.offsetInBytes,
+        logoData.lengthInBytes,
+      ),
+    );
     final document = pw.Document(
       title: 'SariScan ${receiptNumber(sale.id)}',
       author: 'SariScan',
@@ -27,9 +33,11 @@ class ReceiptScreen extends StatelessWidget {
         margin: const pw.EdgeInsets.all(32),
         build: (context) => [
           pw.Center(
-            child: pw.Text(
-              'SariScan - Tindahan POS',
-              style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
+            child: pw.Image(
+              logo,
+              width: 120,
+              height: 92,
+              fit: pw.BoxFit.contain,
             ),
           ),
           pw.SizedBox(height: 14),
@@ -131,9 +139,9 @@ class ReceiptScreen extends StatelessWidget {
         top: false,
         child: Container(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            border: Border(top: BorderSide(color: AppTheme.border)),
+          decoration: BoxDecoration(
+            color: AppTheme.of(context).baseSunken,
+            border: Border(top: BorderSide(color: AppTheme.of(context).border)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -188,9 +196,12 @@ class ReceiptScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 18),
-                      const Text(
+                      Text(
                         'Amount received',
-                        style: TextStyle(fontSize: 11, color: AppTheme.muted),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppTheme.of(context).muted,
+                        ),
                       ),
                       const SizedBox(height: 4),
                       PriceText(
@@ -209,10 +220,10 @@ class ReceiptScreen extends StatelessWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text(
+                                Text(
                                   'Total due',
                                   style: TextStyle(
-                                    color: AppTheme.muted,
+                                    color: AppTheme.of(context).muted,
                                     fontSize: 11,
                                   ),
                                 ),
@@ -234,16 +245,16 @@ class ReceiptScreen extends StatelessWidget {
                               children: [
                                 Text(
                                   isCash ? 'Change due' : 'Added to ledger',
-                                  style: const TextStyle(
-                                    color: AppTheme.emerald,
+                                  style: TextStyle(
+                                    color: AppTheme.of(context).emerald,
                                     fontSize: 11,
                                   ),
                                 ),
                                 PriceText(
                                   money(isCash ? sale.change : sale.total),
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontFamily: 'SpaceGrotesk',
-                                    color: AppTheme.emerald,
+                                    color: AppTheme.of(context).emerald,
                                     fontSize: 26,
                                     fontWeight: FontWeight.w700,
                                   ),
@@ -260,7 +271,7 @@ class ReceiptScreen extends StatelessWidget {
               const SizedBox(height: 22),
               PhysicalShape(
                 clipper: _ReceiptClipper(),
-                color: Colors.white,
+                color: AppTheme.of(context).baseSunken,
                 shadowColor: const Color(0x160F172A),
                 elevation: 3,
                 child: Padding(
@@ -268,11 +279,7 @@ class ReceiptScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Icon(
-                        Icons.storefront_outlined,
-                        size: 36,
-                        color: AppTheme.ink,
-                      ),
+                      const Center(child: BrandMark(size: 140, wordmark: true)),
                       const SizedBox(height: 10),
                       const Text(
                         'Tindahan POS',
@@ -284,10 +291,13 @@ class ReceiptScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      const Text(
+                      Text(
                         'SariScan digital receipt',
                         textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 11, color: AppTheme.muted),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppTheme.of(context).muted,
+                        ),
                       ),
                       const SizedBox(height: 16),
                       _ReceiptRow(
@@ -303,7 +313,7 @@ class ReceiptScreen extends StatelessWidget {
                         value: isCash ? 'Cash' : 'Utang',
                       ),
                       const Divider(height: 28),
-                      const Row(
+                      Row(
                         children: [
                           Expanded(
                             child: Text(
@@ -311,7 +321,7 @@ class ReceiptScreen extends StatelessWidget {
                               style: TextStyle(
                                 fontSize: 9,
                                 fontWeight: FontWeight.w700,
-                                color: AppTheme.muted,
+                                color: AppTheme.of(context).muted,
                                 letterSpacing: .8,
                               ),
                             ),
@@ -321,7 +331,7 @@ class ReceiptScreen extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 9,
                               fontWeight: FontWeight.w700,
-                              color: AppTheme.muted,
+                              color: AppTheme.of(context).muted,
                               letterSpacing: .8,
                             ),
                           ),
@@ -348,9 +358,9 @@ class ReceiptScreen extends StatelessWidget {
                                     const SizedBox(height: 4),
                                     Text(
                                       '${item.quantity} × ${money(item.unitPrice)}',
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 11,
-                                        color: AppTheme.muted,
+                                        color: AppTheme.of(context).muted,
                                       ),
                                     ),
                                   ],
@@ -391,16 +401,19 @@ class ReceiptScreen extends StatelessWidget {
                         ),
                       ],
                       const Divider(height: 28),
-                      const Text(
+                      Text(
                         'Salamat sa inyong pagtangkilik!',
                         textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 11, color: AppTheme.muted),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppTheme.of(context).muted,
+                        ),
                       ),
                       const SizedBox(height: 8),
-                      const Icon(
+                      Icon(
                         Icons.check_circle_outline,
                         size: 18,
-                        color: AppTheme.emerald,
+                        color: AppTheme.of(context).emerald,
                       ),
                     ],
                   ),

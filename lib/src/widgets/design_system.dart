@@ -3,33 +3,40 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import 'price_text.dart';
 
+/// The supplied SariScan artwork. Use the wordmark where space permits,
+/// and the storefront/scanner symbol at compact sizes.
 class BrandMark extends StatelessWidget {
-  const BrandMark({super.key, this.size = 42});
+  const BrandMark({
+    super.key,
+    this.size = 42,
+    this.wordmark = false,
+    this.showBackground = true,
+  });
+  static const logoAsset = 'assets/branding/sariscan_logo.png';
+  static const symbolAsset = 'assets/branding/sariscan_symbol.png';
   final double size;
+  final bool wordmark;
+  final bool showBackground;
+
   @override
-  Widget build(BuildContext context) => Container(
-    width: size,
-    height: size,
-    decoration: BoxDecoration(
-      gradient: AppTheme.brandGradient,
-      borderRadius: BorderRadius.circular(size * .3),
-      boxShadow: [
-        BoxShadow(
-          color: AppTheme.emeraldDeep.withValues(alpha: .35),
-          blurRadius: 18,
-          offset: const Offset(0, 7),
-        ),
-        BoxShadow(
-          color: Colors.white.withValues(alpha: .6),
-          blurRadius: 10,
-          offset: const Offset(-3, -3),
-        ),
-      ],
-    ),
-    child: Icon(
-      Icons.storefront_outlined,
-      color: Colors.white,
-      size: size * .55,
+  Widget build(BuildContext context) => Semantics(
+    label: 'SariScan',
+    image: true,
+    child: Container(
+      width: size,
+      height: wordmark ? size * .80 : size,
+      padding: EdgeInsets.all(size * (wordmark ? .06 : .10)),
+      decoration: BoxDecoration(
+        // A light backing keeps the charcoal artwork readable when needed.
+        color: showBackground ? Colors.white : Colors.transparent,
+        borderRadius: BorderRadius.circular(wordmark ? 18 : size * .24),
+      ),
+      child: Image.asset(
+        wordmark ? logoAsset : symbolAsset,
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.high,
+        excludeFromSemantics: true,
+      ),
     ),
   );
 }
@@ -40,23 +47,23 @@ class StatusPill extends StatelessWidget {
   const StatusPill(
     this.text, {
     super.key,
-    this.color = AppTheme.emerald,
-    this.background = AppTheme.mint,
+    this.color,
+    this.background,
     this.icon,
   });
   final String text;
-  final Color color;
-  final Color background;
+  final Color? color;
+  final Color? background;
   final IconData? icon;
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
     decoration: BoxDecoration(
-      color: background,
+      color: background ?? AppTheme.of(context).mint,
       borderRadius: BorderRadius.circular(99),
       boxShadow: [
         BoxShadow(
-          color: color.withValues(alpha: .18),
+          color: (color ?? AppTheme.of(context).emerald).withValues(alpha: .18),
           blurRadius: 8,
           offset: const Offset(0, 3),
         ),
@@ -66,7 +73,7 @@ class StatusPill extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         if (icon != null) ...[
-          Icon(icon, size: 12, color: color),
+          Icon(icon, size: 12, color: color ?? AppTheme.of(context).emerald),
           const SizedBox(width: 4),
         ],
         Text(
@@ -74,7 +81,7 @@ class StatusPill extends StatelessWidget {
           style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w700,
-            color: color,
+            color: color ?? AppTheme.of(context).emerald,
           ),
         ),
       ],
@@ -125,20 +132,16 @@ class MetricHero extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(22),
     decoration: BoxDecoration(
-      gradient: const LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [AppTheme.emeraldDeep, Color(0xFF215C40), AppTheme.ink],
-      ),
+      gradient: AppTheme.of(context).heroGradient,
       borderRadius: BorderRadius.circular(26),
       boxShadow: [
         BoxShadow(
-          color: AppTheme.baseDark,
+          color: AppTheme.of(context).baseDark,
           blurRadius: 20,
           offset: const Offset(6, 8),
         ),
         BoxShadow(
-          color: Colors.white.withValues(alpha: .7),
+          color: AppTheme.of(context).baseLight.withValues(alpha: .7),
           blurRadius: 16,
           offset: const Offset(-5, -5),
         ),
@@ -149,13 +152,13 @@ class MetricHero extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(icon, color: const Color(0xFF8FE3B9), size: 18),
+            Icon(icon, color: Colors.white70, size: 18),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
                 label.toUpperCase(),
                 style: const TextStyle(
-                  color: Color(0xFFC3F0D8),
+                  color: Colors.white70,
                   fontSize: 11,
                   letterSpacing: 1,
                   fontWeight: FontWeight.w600,
@@ -180,7 +183,7 @@ class MetricHero extends StatelessWidget {
           style: const TextStyle(
             fontFamily: 'PlusJakartaSans',
             fontSize: 11,
-            color: Color(0xFFDCF5E6),
+            color: Colors.white70,
           ),
           child: footer,
         ),
@@ -211,10 +214,10 @@ class EmptyState extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            gradient: AppTheme.insetGradient,
+            gradient: AppTheme.of(context).insetGradient,
             shape: BoxShape.circle,
           ),
-          child: Icon(icon, color: AppTheme.emeraldDeep, size: 30),
+          child: Icon(icon, color: AppTheme.of(context).emeraldDeep, size: 30),
         ),
         const SizedBox(height: 16),
         Text(

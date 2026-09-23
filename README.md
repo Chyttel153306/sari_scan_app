@@ -48,6 +48,23 @@ the owner adds them, and they are saved to app-private storage on the phone.
 Android/iOS removes that data when the app is uninstalled or its storage is
 cleared, so back up important records separately.
 
+## Share a store between phones
+
+In Settings > Sync, create a code on the phone that holds the store. Creating
+the code uploads existing records and photos, including photos added before
+linking. Enter that code on another phone to download the store and cache its
+photos locally.
+
+For later changes, choose **Upload changes** on the source phone, then
+**Download latest** on the other phone. Uploading retries pending photos; a
+photo failure shows a warning while the records still sync. Downloads replace
+the receiving phone's store records, so upload any changes you need first.
+
+**Unlink this phone** clears its local store records and cached product photos.
+The cloud store remains saved, and entering the same code restores it. Keep the
+code and upload changes before unlinking; changes saved only on the phone will
+be lost. The phone's owner login is retained.
+
 ## Run on an Android phone over USB
 
 1. Enable Developer options and USB debugging on the phone.

@@ -84,9 +84,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           top: false,
           child: Container(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              border: Border(top: BorderSide(color: AppTheme.border)),
+            decoration: BoxDecoration(
+              color: AppTheme.of(context).base,
+              border: Border(
+                top: BorderSide(color: AppTheme.of(context).border),
+              ),
             ),
             child: FilledButton.icon(
               onPressed: canComplete ? _complete : null,
@@ -113,8 +115,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         'Order summary',
                         trailing: StatusPill(
                           '${widget.store.cartItemCount} items',
-                          color: AppTheme.muted,
-                          background: AppTheme.canvas,
+                          color: AppTheme.of(context).muted,
+                          background: AppTheme.of(context).canvas,
                         ),
                       ),
                       const SizedBox(height: 18),
@@ -128,9 +130,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                 height: 30,
                                 alignment: Alignment.center,
                                 decoration: BoxDecoration(
-                                  color: AppTheme.canvas,
+                                  color: AppTheme.of(context).canvas,
                                   borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: AppTheme.border),
+                                  border: Border.all(
+                                    color: AppTheme.of(context).border,
+                                  ),
                                 ),
                                 child: Text(
                                   '${line.quantity}',
@@ -171,29 +175,29 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: AppTheme.mint,
+                          color: AppTheme.of(context).mint,
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            const Text(
+                            Text(
                               'TOTAL AMOUNT TO PAY',
                               style: TextStyle(
                                 fontSize: 10,
                                 letterSpacing: .8,
-                                color: Color(0xFF047857),
+                                color: AppTheme.of(context).emeraldDeep,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
                             const SizedBox(height: 4),
                             PriceText(
                               money(total),
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontFamily: 'SpaceGrotesk',
                                 fontSize: 32,
                                 fontWeight: FontWeight.w700,
-                                color: Color(0xFF065F46),
+                                color: AppTheme.of(context).emeraldDeep,
                               ),
                             ),
                           ],
@@ -267,7 +271,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           children: [
                             ActionChip(
                               label: const Text('Exact'),
-                              labelStyle: const TextStyle(color: Colors.black),
+                              labelStyle: TextStyle(
+                                color: AppTheme.of(context).ink,
+                              ),
                               onPressed: () => setState(
                                 () => _cashController.text = total
                                     .toStringAsFixed(2),
@@ -278,7 +284,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                 .map(
                                   (value) => ActionChip(
                                     label: Text(money(value)),
-                                    labelStyle: const TextStyle(color: Colors.black),
+                                    labelStyle: TextStyle(
+                                      color: AppTheme.of(context).ink,
+                                    ),
                                     onPressed: () => setState(
                                       () => _cashController.text = value
                                           .toStringAsFixed(2),
@@ -293,8 +301,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             Expanded(
                               child: Text(
                                 change >= 0 ? 'Change' : 'Amount still due',
-                                style: const TextStyle(
-                                  color: AppTheme.muted,
+                                style: TextStyle(
+                                  color: AppTheme.of(context).muted,
                                   fontSize: 12,
                                 ),
                               ),
@@ -308,7 +316,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                   fontSize: 24,
                                   fontWeight: FontWeight.w700,
                                   color: change >= 0
-                                      ? AppTheme.emerald
+                                      ? AppTheme.of(context).emerald
                                       : Theme.of(context).colorScheme.error,
                                 ),
                               ),
@@ -409,13 +417,18 @@ class _PaymentOption extends StatelessWidget {
     child: AnimatedContainer(
       duration: const Duration(milliseconds: 150),
       decoration: BoxDecoration(
-        color: selected ? AppTheme.mint : AppTheme.base,
+        color: selected ? AppTheme.of(context).mint : AppTheme.of(context).base,
         borderRadius: BorderRadius.circular(18),
         // Selected reads as "pressed in" (no raised shadow, thin accent
         // ring); idle reads as raised, poppable off the page.
-        boxShadow: selected ? const [] : AppTheme.raisedShadows(distance: 4, blur: 10),
+        boxShadow: selected
+            ? const []
+            : AppTheme.of(context).raisedShadows(distance: 4, blur: 10),
         border: selected
-            ? Border.all(color: AppTheme.emerald.withValues(alpha: .45), width: 1.2)
+            ? Border.all(
+                color: AppTheme.of(context).emerald.withValues(alpha: .45),
+                width: 1.2,
+              )
             : null,
       ),
       child: Material(
@@ -424,40 +437,47 @@ class _PaymentOption extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(18),
           child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    icon,
-                    color: selected ? AppTheme.emerald : AppTheme.muted,
-                    size: 24,
-                  ),
-                  const Spacer(),
-                  Icon(
-                    selected ? Icons.check_circle : Icons.circle_outlined,
-                    color: selected ? AppTheme.emerald : AppTheme.border,
-                    size: 18,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                label,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 14,
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      icon,
+                      color: selected
+                          ? AppTheme.of(context).emerald
+                          : AppTheme.of(context).muted,
+                      size: 24,
+                    ),
+                    const Spacer(),
+                    Icon(
+                      selected ? Icons.check_circle : Icons.circle_outlined,
+                      color: selected
+                          ? AppTheme.of(context).emerald
+                          : AppTheme.of(context).border,
+                      size: 18,
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                subtitle,
-                style: const TextStyle(fontSize: 10, color: AppTheme.muted),
-              ),
-            ],
-          ),
+                const SizedBox(height: 12),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: AppTheme.of(context).muted,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

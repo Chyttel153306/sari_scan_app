@@ -141,12 +141,12 @@ class _ProductsScreenState extends State<ProductsScreen> {
                                 labelStyle: TextStyle(
                                   color: _category == category
                                       ? Colors.white
-                                      : AppTheme.muted,
+                                      : AppTheme.of(context).muted,
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
                                 ),
                                 selected: _category == category,
-                                selectedColor: AppTheme.emerald,
+                                selectedColor: AppTheme.of(context).emerald,
                                 showCheckmark: false,
                                 onSelected: (_) =>
                                     setState(() => _category = category),
@@ -161,9 +161,9 @@ class _ProductsScreenState extends State<ProductsScreen> {
                   Expanded(
                     child: Text(
                       '${_products.length} products',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
-                        color: AppTheme.muted,
+                        color: AppTheme.of(context).muted,
                       ),
                     ),
                   ),
@@ -504,9 +504,9 @@ class _ProductDialogState extends State<ProductDialog> {
                             ? 'No categories yet. Type to create one.'
                             : 'No match — keep typing to create '
                                   '"${_category.text.trim()}".',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
-                          color: AppTheme.muted,
+                          color: AppTheme.of(context).muted,
                         ),
                       ),
                     )
@@ -765,7 +765,7 @@ class _ProductDialogState extends State<ProductDialog> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           CircleAvatar(
-                            backgroundColor: AppTheme.mint,
+                            backgroundColor: AppTheme.of(context).mint,
                             child: Icon(
                               Icons.add_a_photo_outlined,
                               color: colors.primary,

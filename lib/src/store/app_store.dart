@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import '../models/models.dart';
+import '../theme/theme_choice.dart';
 import '../models/sales_trend.dart';
 import '../services/local_storage_service.dart';
 import '../services/supabase_image_service.dart';
@@ -12,11 +13,12 @@ import '../services/supabase_sync_service.dart';
 /// The outcome of a cloud sync operation, surfaced to the UI so it can show
 /// a confirmation or an error without the store needing to throw.
 class CloudSyncResult {
-  const CloudSyncResult.success(this.syncCode) : error = null;
-  const CloudSyncResult.failure(this.error) : syncCode = null;
+  const CloudSyncResult.success(this.syncCode, {this.warning}) : error = null;
+  const CloudSyncResult.failure(this.error) : syncCode = null, warning = null;
 
   final String? syncCode;
   final String? error;
+  final String? warning;
 
   bool get isSuccess => error == null;
 }
@@ -89,11 +91,14 @@ class AppStore extends ChangeNotifier {
   bool isLoading = false;
   Map<String, dynamic>? _account;
   double markupPercent;
+  ThemeChoice _themeChoice = ThemeChoice.defaultTheme;
+  ThemeChoice get themeChoice => _themeChoice;
 
   // Cloud sync state, persisted locally so the pairing survives app
   // restarts without needing to sync again.
   String? syncCode;
   DateTime? lastSyncedAt;
+  String? photoSyncWarning;
 
   bool get isAuthenticated => currentUserName != null;
   bool get hasLocalAccount => _account != null;
@@ -192,10 +197,30 @@ class AppStore extends ChangeNotifier {
 
   /// Updates the default markup percentage used to suggest selling prices.
   Future<String?> updateMarkupPercent(double percent) async {
-    if (percent < 0) return 'Enter 0 or more.';
+    if (!percent.isFinite || percent < 0) {
+      return 'Enter a valid percentage of 0 or more.';
+    }
+    final previous = markupPercent;
     markupPercent = percent;
     notifyListeners();
-    return _saveNow();
+    final error = await _saveNow();
+    if (error != null && markupPercent == percent) {
+      markupPercent = previous;
+      notifyListeners();
+    }
+    return error;
+  }
+
+  Future<String?> updateTheme(ThemeChoice choice) async {
+    final previous = _themeChoice;
+    _themeChoice = choice;
+    notifyListeners();
+    final error = await _saveNow();
+    if (error != null && _themeChoice == choice) {
+      _themeChoice = previous;
+      notifyListeners();
+    }
+    return error;
   }
 
   Future<void> logout() async {
@@ -434,28 +459,30 @@ class AppStore extends ChangeNotifier {
   /// entire existing catalog's photos into sync. Requires this phone to
   /// be linked to a cloud store. Returns how many photos were uploaded.
   Future<int> backfillProductImages() async {
+    photoSyncWarning = null;
     final sync = imageSync;
     final code = syncCode;
     if (sync == null || code == null) return 0;
     var uploaded = 0;
+    var failed = 0;
+    Object? firstError;
     for (final product in products) {
       final current = product.imageUrl;
       final needsUpload =
           current == null ||
           current.isEmpty ||
-          SupabaseImageService.isLegacyUrl(current);
+          SupabaseImageService.isLegacyUrl(current) ||
+          !current.startsWith('$code/');
       if (!needsUpload) continue;
       try {
         var path = product.imagePath;
         final hasLocalFile =
             path != null && path.isNotEmpty && await File(path).exists();
         if (!hasLocalFile) {
-          // Only a legacy ImgBB copy exists: fetch it once, keep it
-          // locally, then upload it to Supabase.
-          if (current == null ||
-              !SupabaseImageService.isLegacyUrl(current) ||
-              storage == null) {
-            continue;
+          // Fetch an existing remote copy before moving it into this store.
+          if (current == null || current.isEmpty || storage == null) {
+            if (path == null || path.isEmpty) continue;
+            throw const FileSystemException('The original photo is missing.');
           }
           final bytes = await sync.downloadImageBytes(current);
           path = await storage!.saveImageBytes(bytes);
@@ -463,9 +490,15 @@ class AppStore extends ChangeNotifier {
         }
         product.imageUrl = await sync.uploadImage(path, syncCode: code);
         uploaded++;
-      } catch (_) {
-        // Leave it unsynced; the button can simply be tapped again later.
+      } catch (error) {
+        failed++;
+        firstError ??= error;
       }
+    }
+    if (failed > 0) {
+      photoSyncWarning =
+          '$failed photo(s) could not upload: $firstError. '
+          'Retry Upload changes on this phone.';
     }
     if (uploaded > 0) {
       notifyListeners();
@@ -581,12 +614,13 @@ class AppStore extends ChangeNotifier {
       return const CloudSyncResult.failure('Cloud sync is not available.');
     }
     try {
-      final code = await cloud.createSyncCode(_snapshot());
+      final code = await cloud.createSyncCode(_cloudSnapshot());
       syncCode = code;
       lastSyncedAt = DateTime.now();
       notifyListeners();
       await _saveNow();
-      return CloudSyncResult.success(code);
+      // Creating the store first grants access to its private photo folder.
+      return await pushToCloud();
     } catch (error) {
       return CloudSyncResult.failure('Could not start cloud sync: $error');
     }
@@ -616,7 +650,7 @@ class AppStore extends ChangeNotifier {
       lastSyncedAt = remote.updatedAt ?? DateTime.now();
       notifyListeners();
       await _saveNow();
-      return CloudSyncResult.success(normalized);
+      return CloudSyncResult.success(normalized, warning: photoSyncWarning);
     } catch (error) {
       return CloudSyncResult.failure('Could not join cloud sync: $error');
     }
@@ -633,14 +667,17 @@ class AppStore extends ChangeNotifier {
       return const CloudSyncResult.failure('Set up sync first.');
     }
     try {
+      // Restore membership before accessing the private photo folder.
+      await cloud.downloadSnapshot(code);
+      await backfillProductImages();
       final uploadedAt = await cloud.uploadSnapshot(
         syncCode: code,
-        snapshot: _snapshot(),
+        snapshot: _cloudSnapshot(),
       );
       lastSyncedAt = uploadedAt;
       notifyListeners();
       await _saveNow();
-      return CloudSyncResult.success(code);
+      return CloudSyncResult.success(code, warning: photoSyncWarning);
     } catch (error) {
       return CloudSyncResult.failure('Could not upload to cloud: $error');
     }
@@ -668,19 +705,33 @@ class AppStore extends ChangeNotifier {
       lastSyncedAt = remote.updatedAt ?? DateTime.now();
       notifyListeners();
       await _saveNow();
-      return CloudSyncResult.success(code);
+      return CloudSyncResult.success(code, warning: photoSyncWarning);
     } catch (error) {
       return CloudSyncResult.failure('Could not download from cloud: $error');
     }
   }
 
-  /// Unlinks this phone from cloud sync without deleting the cloud data,
-  /// so other phones using the same code are unaffected.
-  Future<void> leaveCloudSync() async {
+  /// Clears this phone's store and photo cache. The cloud store and the
+  /// device's owner login remain available so the code can be joined again.
+  Future<String?> leaveCloudSync() async {
+    products.clear();
+    customers.clear();
+    sales.clear();
+    stockAdditions.clear();
+    _cart.clear();
+    markupPercent = _defaultMarkupPercent;
     syncCode = null;
     lastSyncedAt = null;
+    photoSyncWarning = null;
     notifyListeners();
-    await _saveNow();
+    final error = await _saveNow();
+    if (error != null) return error;
+    try {
+      await storage?.clearProductImages();
+      return null;
+    } catch (error) {
+      return 'Store unlinked, but some cached photos could not be removed: $error';
+    }
   }
 
   /// Downloads and locally caches any product photo whose local file is
@@ -688,12 +739,14 @@ class AppStore extends ChangeNotifier {
   /// right after joining or pulling a cloud snapshot on a phone that
   /// never had that photo locally, or on first launch after restoring an
   /// old local snapshot whose image files no longer exist. Failures are
-  /// left in place silently; [ProductImage] falls back to a placeholder
-  /// until the next successful sync.
+  /// reported in [photoSyncWarning] and retried on the next sync.
   Future<void> _hydrateMissingProductImages() async {
+    photoSyncWarning = null;
     final sync = imageSync;
     final localStorage = storage;
     if (sync == null || localStorage == null) return;
+    var failed = 0;
+    Object? firstError;
     for (final product in products) {
       final url = product.imageUrl;
       if (url == null || url.isEmpty) continue;
@@ -702,9 +755,15 @@ class AppStore extends ChangeNotifier {
       try {
         final bytes = await sync.downloadImageBytes(url);
         product.imagePath = await localStorage.saveImageBytes(bytes);
-      } catch (_) {
-        // Leave imagePath as-is; try again on the next sync.
+      } catch (error) {
+        failed++;
+        firstError ??= error;
       }
+    }
+    if (failed > 0) {
+      photoSyncWarning =
+          '$failed photo(s) could not download: $firstError. '
+          'Retry Download latest on this phone.';
     }
   }
 
@@ -713,9 +772,21 @@ class AppStore extends ChangeNotifier {
   /// this never touches the current login session or account name, since
   /// those are meant to stay tied to this specific phone.
   void _applyCloudSnapshot(Map<String, dynamic> snapshot) {
+    final localPhotos = <String, String>{
+      for (final product in products)
+        if (product.imageUrl != null && product.imagePath != null)
+          product.imageUrl!: product.imagePath!,
+    };
     products
       ..clear()
-      ..addAll(_mapRows(snapshot['products']).map(_productFromRow));
+      ..addAll(
+        _mapRows(snapshot['products']).map((row) {
+          final product = _productFromRow(row);
+          // A path from another phone is never a local photo cache.
+          product.imagePath = localPhotos[product.imageUrl];
+          return product;
+        }),
+      );
     customers
       ..clear()
       ..addAll(_mapRows(snapshot['customers']).map(_customerFromRow));
@@ -751,6 +822,7 @@ class AppStore extends ChangeNotifier {
         (snapshot['markup_percent'] as num?)?.toDouble() ??
         _defaultMarkupPercent;
     syncCode = snapshot['sync_code']?.toString();
+    _themeChoice = ThemeChoice.fromName(snapshot['theme']);
     final lastSyncedRaw = snapshot['last_synced_at'];
     lastSyncedAt = lastSyncedRaw == null
         ? null
@@ -785,8 +857,18 @@ class AppStore extends ChangeNotifier {
         .toList();
   }
 
+  Map<String, dynamic> _cloudSnapshot() => _snapshot()
+    ..remove('theme')
+    ..remove('account')
+    ..remove('sync_code')
+    ..remove('last_synced_at')
+    ..['products'] = products
+        .map((product) => _productToRow(product)..remove('image_path'))
+        .toList();
+
   Map<String, dynamic> _snapshot() => {
     'version': _dataVersion,
+    'theme': _themeChoice.name,
     'account': _account,
     'markup_percent': markupPercent,
     'sync_code': syncCode,

@@ -194,18 +194,18 @@ class _SalesTrendChartState extends State<SalesTrendChart> {
                                                                         index ||
                                                                     point.value ==
                                                                         maximum)
-                                                            ? const LinearGradient(
-                                                                begin: Alignment
-                                                                    .bottomCenter,
-                                                                end: Alignment
-                                                                    .topCenter,
+                                                            ? LinearGradient(
                                                                 colors: [
-                                                                  Color(
-                                                                    0xFF2E7D53,
-                                                                  ),
-                                                                  Color(
-                                                                    0xFF3E9C6F,
-                                                                  ),
+                                                                  Theme.of(
+                                                                        context,
+                                                                      )
+                                                                      .colorScheme
+                                                                      .secondary,
+                                                                  Theme.of(
+                                                                        context,
+                                                                      )
+                                                                      .colorScheme
+                                                                      .primary,
                                                                 ],
                                                               )
                                                             : null,
@@ -216,9 +216,9 @@ class _SalesTrendChartState extends State<SalesTrendChart> {
                                                                     point.value ==
                                                                         maximum)
                                                             ? null
-                                                            : const Color(
-                                                                0xFFD3DBD5,
-                                                              ),
+                                                            : Theme.of(context)
+                                                                  .colorScheme
+                                                                  .outlineVariant,
                                                         borderRadius:
                                                             const BorderRadius.vertical(
                                                               top:

@@ -45,7 +45,7 @@ class CatalogProductCard extends StatelessWidget {
                 children: [
                   Positioned.fill(
                     child: ColoredBox(
-                      color: AppTheme.canvas,
+                      color: AppTheme.of(context).canvas,
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(8, 30, 8, 6),
                         child: LayoutBuilder(
@@ -81,12 +81,12 @@ class CatalogProductCard extends StatelessWidget {
                             ? colors.error
                             : product.isLowStock
                             ? colors.tertiary
-                            : AppTheme.emerald,
+                            : AppTheme.of(context).emerald,
                         background: unavailable
                             ? colors.errorContainer
                             : product.isLowStock
-                            ? AppTheme.warnBg
-                            : AppTheme.mint,
+                            ? AppTheme.of(context).warnBg
+                            : AppTheme.of(context).mint,
                       ),
                     ),
                   ),
@@ -95,9 +95,9 @@ class CatalogProductCard extends StatelessWidget {
                       right: 8,
                       top: 8,
                       child: Material(
-                        color: AppTheme.emeraldDeep,
+                        color: AppTheme.of(context).emeraldDeep,
                         elevation: 3,
-                        shadowColor: AppTheme.baseDark,
+                        shadowColor: AppTheme.of(context).baseDark,
                         shape: const CircleBorder(),
                         child: PopupMenuButton<String>(
                           tooltip: 'Product options',
@@ -153,9 +153,11 @@ class CatalogProductCard extends StatelessWidget {
                         child: Container(
                           padding: const EdgeInsets.all(5),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: .92),
+                            color: AppTheme.of(
+                              context,
+                            ).baseSunken.withValues(alpha: .92),
                             shape: BoxShape.circle,
-                            boxShadow: AppTheme.softShadows(),
+                            boxShadow: AppTheme.of(context).softShadows(),
                           ),
                           child: Icon(
                             product.imageUrl != null
@@ -163,8 +165,8 @@ class CatalogProductCard extends StatelessWidget {
                                 : Icons.cloud_off_outlined,
                             size: 14,
                             color: product.imageUrl != null
-                                ? AppTheme.emerald
-                                : AppTheme.muted,
+                                ? AppTheme.of(context).emerald
+                                : AppTheme.of(context).muted,
                           ),
                         ),
                       ),
@@ -192,7 +194,9 @@ class CatalogProductCard extends StatelessWidget {
             fontSize: 13,
             height: 1.3,
             fontWeight: FontWeight.w600,
-            color: unavailable ? AppTheme.muted : AppTheme.ink,
+            color: unavailable
+                ? AppTheme.of(context).muted
+                : AppTheme.of(context).ink,
             decoration: product.isArchived ? TextDecoration.lineThrough : null,
           ),
         ),
@@ -204,7 +208,9 @@ class CatalogProductCard extends StatelessWidget {
                 money(product.price).replaceFirst(RegExp(r'\.00$'), ''),
                 scaleDown: false,
                 style: productPriceStyle(context).copyWith(
-                  color: unavailable ? AppTheme.muted : AppTheme.emeraldDeep,
+                  color: unavailable
+                      ? AppTheme.of(context).muted
+                      : AppTheme.of(context).emeraldDeep,
                 ),
               ),
             ),
@@ -215,8 +221,8 @@ class CatalogProductCard extends StatelessWidget {
                 onPressed: product.isArchived ? null : onAddStock,
                 icon: const Icon(Icons.add_box_outlined, size: 19),
                 style: IconButton.styleFrom(
-                  backgroundColor: AppTheme.mint,
-                  foregroundColor: const Color(0xFF047857),
+                  backgroundColor: AppTheme.of(context).mint,
+                  foregroundColor: AppTheme.of(context).emeraldDeep,
                   shape: const CircleBorder(),
                 ),
               ),

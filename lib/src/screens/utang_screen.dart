@@ -121,7 +121,7 @@ class _UtangScreenState extends State<UtangScreen> {
                           labelStyle: TextStyle(
                             color: _filter == filter
                                 ? Colors.white
-                                : AppTheme.muted,
+                                : AppTheme.of(context).muted,
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                           ),
@@ -167,8 +167,8 @@ class _UtangScreenState extends State<UtangScreen> {
                                 alignment: Alignment.center,
                                 decoration: BoxDecoration(
                                   color: customer.balance > 0
-                                      ? AppTheme.warnBg
-                                      : AppTheme.mint,
+                                      ? AppTheme.of(context).warnBg
+                                      : AppTheme.of(context).mint,
                                   borderRadius: BorderRadius.circular(14),
                                 ),
                                 child: Text(
@@ -187,8 +187,8 @@ class _UtangScreenState extends State<UtangScreen> {
                                     fontWeight: FontWeight.w800,
                                     fontSize: 13,
                                     color: customer.balance > 0
-                                        ? AppTheme.warn
-                                        : AppTheme.emerald,
+                                        ? AppTheme.of(context).warn
+                                        : AppTheme.of(context).emerald,
                                   ),
                                 ),
                               ),
@@ -214,9 +214,9 @@ class _UtangScreenState extends State<UtangScreen> {
                                           : '${customer.ledger.length} ledger entries',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 10,
-                                        color: AppTheme.muted,
+                                        color: AppTheme.of(context).muted,
                                       ),
                                     ),
                                   ],
@@ -240,11 +240,11 @@ class _UtangScreenState extends State<UtangScreen> {
                                     StatusPill(
                                       customer.balance > 0 ? 'Pending' : 'Paid',
                                       color: customer.balance > 0
-                                          ? AppTheme.warn
-                                          : AppTheme.emerald,
+                                          ? AppTheme.of(context).warn
+                                          : AppTheme.of(context).emerald,
                                       background: customer.balance > 0
-                                          ? AppTheme.warnBg
-                                          : AppTheme.mint,
+                                          ? AppTheme.of(context).warnBg
+                                          : AppTheme.of(context).mint,
                                     ),
                                   ],
                                 ),
@@ -370,8 +370,8 @@ class CustomerLedgerScreen extends StatelessWidget {
                   ],
                   FilledButton.icon(
                     style: FilledButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: AppTheme.emerald,
+                      backgroundColor: AppTheme.of(context).baseSunken,
+                      foregroundColor: AppTheme.of(context).emerald,
                     ),
                     onPressed: customer.balance > 0
                         ? () => _recordPayment(context)

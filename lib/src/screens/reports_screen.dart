@@ -79,7 +79,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             Container(
               padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
-                color: const Color(0xFFEFF3F7),
+                color: AppTheme.of(context).baseSunken,
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Row(
@@ -94,7 +94,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             decoration: BoxDecoration(
                               color: _period == period
-                                  ? Colors.white
+                                  ? AppTheme.of(context).mint
                                   : Colors.transparent,
                               borderRadius: BorderRadius.circular(12),
                             ),
@@ -107,8 +107,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                     ? FontWeight.w800
                                     : FontWeight.w500,
                                 color: _period == period
-                                    ? const Color(0xFF065F46)
-                                    : AppTheme.muted,
+                                    ? AppTheme.of(context).emeraldDeep
+                                    : AppTheme.of(context).muted,
                               ),
                             ),
                           ),
@@ -300,7 +300,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       label: 'Utang',
                       value: utang,
                       total: total,
-                      color: AppTheme.warn,
+                      color: AppTheme.of(context).warn,
                     ),
                   ],
                 ),
@@ -418,7 +418,7 @@ class _PaymentBar extends StatelessWidget {
             value: progress,
             minHeight: 10,
             color: color,
-            backgroundColor: const Color(0xFFE5E2E1),
+            backgroundColor: AppTheme.of(context).border,
           ),
         ),
       ],

@@ -1,115 +1,168 @@
-// Run with: flutter test tool/generate_launcher_icons.dart
-// Renders the existing login screen's SariScan mark using Material Icons.
+// Run with: dart run tool/generate_launcher_icons.dart
+// Derives all sizes from the approved transparent SariScan artwork.
 import 'dart:convert';
 import 'dart:io';
-import 'dart:ui' as ui;
-
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_test/flutter_test.dart';
+import 'dart:math' as math;
 import 'package:image/image.dart' as img;
-import 'package:sari_scan_app/src/theme/app_theme.dart';
 
-void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
-  test('generate SariScan launcher assets', () async {
-    final loader = FontLoader('MaterialIcons')
-      ..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'));
-    await loader.load();
-
-    Future<void> render(
-      String path,
-      int size, {
-      bool foreground = false,
-    }) async {
-      final recorder = ui.PictureRecorder();
-      final canvas = Canvas(recorder);
-      if (!foreground) {
-        final bounds = Rect.fromLTWH(0, 0, size.toDouble(), size.toDouble());
-        canvas.drawRect(
-          bounds,
-          Paint()..shader = AppTheme.brandGradient.createShader(bounds),
-        );
-      }
-      final painter = TextPainter(
-        text: TextSpan(
-          text: String.fromCharCode(Icons.storefront_outlined.codePoint),
-          style: TextStyle(
-            fontFamily: 'MaterialIcons',
-            fontSize: size * (foreground ? 48 / 108 : 52 / 96),
-            color: Colors.white,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      painter.paint(
-        canvas,
-        Offset((size - painter.width) / 2, (size - painter.height) / 2),
-      );
-      final picture = recorder.endRecording();
-      final image = await picture.toImage(size, size);
-      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-      final file = File(path);
-      await file.parent.create(recursive: true);
-      final png = bytes!.buffer.asUint8List();
-      // iOS launcher assets must not contain an alpha channel.
-      await file.writeAsBytes(
-        foreground
-            ? png
-            : img.encodePng(img.decodePng(png)!.convert(numChannels: 3)),
-      );
-      image.dispose();
-      picture.dispose();
-      painter.dispose();
+img.Image trim(img.Image source) {
+  var left = source.width, top = source.height, right = 0, bottom = 0;
+  for (final pixel in source) {
+    if (pixel.a > 8) {
+      left = math.min(left, pixel.x);
+      top = math.min(top, pixel.y);
+      right = math.max(right, pixel.x);
+      bottom = math.max(bottom, pixel.y);
     }
+  }
+  if (left > right) throw StateError('Logo contains no visible pixels.');
+  return img.copyCrop(
+    source,
+    x: left,
+    y: top,
+    width: right - left + 1,
+    height: bottom - top + 1,
+  );
+}
 
-    await render('assets/branding/sariscan_logo.png', 1024);
-    final background = File(
-      'android/app/src/main/res/drawable/ic_launcher_background.xml',
+Future<void> save(String path, img.Image image) async {
+  final file = File(path);
+  await file.parent.create(recursive: true);
+  await file.writeAsBytes(img.encodePng(image));
+}
+
+Future<void> main() async {
+  final source = img.decodePng(
+    await File('assets/branding/sariscan_logo_source.png').readAsBytes(),
+  )!;
+  if (source.numChannels != 4 || source.getPixel(0, 0).a != 0) {
+    throw StateError(
+      'Use the transparent master, without a checkerboard background.',
     );
-    await background.parent.create(recursive: true);
-    String hex(Color color) => '#${color.toARGB32().toRadixString(16)}';
-    await background.writeAsString('''<?xml version="1.0" encoding="utf-8"?>
+  }
+  final logo = trim(source);
+  // Locate the transparent separation between storefront and wordmark.
+  var gapStart = 0, gapLength = 0, bestLength = 0, split = 0;
+  for (
+    var y = (logo.height * .55).round();
+    y < (logo.height * .85).round();
+    y++
+  ) {
+    var occupied = false;
+    for (var x = 0; x < logo.width; x++) {
+      if (logo.getPixel(x, y).a > 8) {
+        occupied = true;
+        break;
+      }
+    }
+    if (!occupied) {
+      if (gapLength == 0) gapStart = y;
+      gapLength++;
+      if (gapLength > bestLength) {
+        bestLength = gapLength;
+        split = gapStart + gapLength ~/ 2;
+      }
+    } else {
+      gapLength = 0;
+    }
+  }
+  if (bestLength < 4) {
+    throw StateError('Cannot find the gap above the wordmark.');
+  }
+  final symbol = trim(
+    img.copyCrop(logo, x: 0, y: 0, width: logo.width, height: split),
+  );
+  await save('assets/branding/sariscan_logo.png', logo);
+  await save('assets/branding/sariscan_symbol.png', symbol);
+
+  Future<void> icon(
+    String path,
+    int size, {
+    bool transparent = false,
+    double scale = .78,
+  }) async {
+    final canvas = img.Image(
+      width: size,
+      height: size,
+      numChannels: transparent ? 4 : 3,
+    );
+    img.fill(
+      canvas,
+      color: transparent
+          ? img.ColorRgba8(0, 0, 0, 0)
+          : img.ColorRgb8(255, 255, 255),
+    );
+    final mark = img.copyResize(
+      symbol,
+      width: (size * scale).round(),
+      interpolation: img.Interpolation.average,
+    );
+    img.compositeImage(
+      canvas,
+      mark,
+      dstX: (size - mark.width) ~/ 2,
+      dstY: (size - mark.height) ~/ 2,
+    );
+    await save(path, canvas);
+  }
+
+  const densities = {
+    'mdpi': 1.0,
+    'hdpi': 1.5,
+    'xhdpi': 2.0,
+    'xxhdpi': 3.0,
+    'xxxhdpi': 4.0,
+  };
+  for (final entry in densities.entries) {
+    final dir = 'android/app/src/main/res/mipmap-${entry.key}';
+    await icon('$dir/ic_launcher.png', (48 * entry.value).round());
+    await icon(
+      '$dir/ic_launcher_foreground.png',
+      (108 * entry.value).round(),
+      transparent: true,
+      scale: .56,
+    );
+    await save(
+      '$dir/launch_image.png',
+      img.copyResize(
+        logo,
+        width: (180 * entry.value).round(),
+        interpolation: img.Interpolation.average,
+      ),
+    );
+  }
+  await File(
+    'android/app/src/main/res/drawable/ic_launcher_background.xml',
+  ).writeAsString('''<?xml version="1.0" encoding="utf-8"?>
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-    <gradient android:angle="45"
-        android:startColor="${hex(AppTheme.brandGradient.colors.first)}"
-        android:endColor="${hex(AppTheme.brandGradient.colors.last)}" />
+    <solid android:color="#FFFFFF" />
 </shape>
 ''');
-    const densities = {
-      'mdpi': 1.0,
-      'hdpi': 1.5,
-      'xhdpi': 2.0,
-      'xxhdpi': 3.0,
-      'xxxhdpi': 4.0,
-    };
-    for (final entry in densities.entries) {
-      final directory = 'android/app/src/main/res/mipmap-${entry.key}';
-      await render('$directory/ic_launcher.png', (48 * entry.value).round());
-      await render(
-        '$directory/ic_launcher_foreground.png',
-        (108 * entry.value).round(),
-        foreground: true,
-      );
-    }
-    const iosDirectory = 'ios/Runner/Assets.xcassets/AppIcon.appiconset';
-    final manifest =
-        jsonDecode(await File('$iosDirectory/Contents.json').readAsString())
-            as Map;
-    for (final entry in manifest['images'] as List) {
-      final size = double.parse((entry['size'] as String).split('x').first);
-      final scale = double.parse(
-        (entry['scale'] as String).replaceAll('x', ''),
-      );
-      await render(
-        '$iosDirectory/${entry['filename']}',
-        (size * scale).round(),
-      );
-    }
-    for (final size in [192, 512]) {
-      await render('web/icons/Icon-$size.png', size);
-      await render('web/icons/Icon-maskable-$size.png', size);
-    }
-    await render('web/favicon.png', 32);
-  });
+  const ios = 'ios/Runner/Assets.xcassets/AppIcon.appiconset';
+  final manifest =
+      jsonDecode(await File('$ios/Contents.json').readAsString()) as Map;
+  for (final entry in manifest['images'] as List) {
+    final size = double.parse((entry['size'] as String).split('x').first);
+    final scale = double.parse((entry['scale'] as String).replaceAll('x', ''));
+    await icon('$ios/${entry['filename']}', (size * scale).round());
+  }
+  for (final scale in [1, 2, 3]) {
+    final suffix = scale == 1 ? '' : '@${scale}x';
+    await save(
+      'ios/Runner/Assets.xcassets/LaunchImage.imageset/LaunchImage$suffix.png',
+      img.copyResize(
+        logo,
+        width: 180 * scale,
+        interpolation: img.Interpolation.average,
+      ),
+    );
+  }
+  for (final size in [192, 512]) {
+    await icon('web/icons/Icon-$size.png', size);
+    await icon('web/icons/Icon-maskable-$size.png', size, scale: .60);
+  }
+  await icon('web/favicon.png', 32, scale: .90);
+  stdout.writeln(
+    'Generated logo ${logo.width}x${logo.height}, symbol ${symbol.width}x${symbol.height}, and Android/iOS/web icons.',
+  );
 }

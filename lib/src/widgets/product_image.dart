@@ -30,7 +30,7 @@ class ProductImage extends StatelessWidget {
 
   Widget _placeholder(BuildContext context) {
     return ColoredBox(
-      color: const Color(0xFFEFF4F1),
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
       child: Center(
         child: Icon(
           Icons.inventory_2_outlined,

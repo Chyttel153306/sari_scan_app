@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../store/app_store.dart';
 import '../theme/app_theme.dart';
+import '../theme/theme_choice.dart';
 import '../utils/formatters.dart';
 import '../widgets/design_system.dart';
 import 'login_screen.dart';
@@ -19,54 +20,153 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  late final TextEditingController _markupController;
-  String? _markupError;
-  bool _savingMarkup = false;
+  bool _savingTheme = false;
+  bool _savingName = false;
   bool _syncing = false;
   bool _backfillingPhotos = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _markupController = TextEditingController(
-      text: _formatPercent(widget.store.markupPercent),
-    );
-  }
-
-  @override
-  void dispose() {
-    _markupController.dispose();
-    super.dispose();
-  }
+  bool get _busy =>
+      _syncing || _backfillingPhotos || _savingName || _savingTheme;
 
   String _formatPercent(double value) => value == value.roundToDouble()
       ? value.toStringAsFixed(0)
       : value.toStringAsFixed(1);
 
-  double get _previewMarkup =>
-      double.tryParse(_markupController.text) ?? widget.store.markupPercent;
-
-  Future<void> _saveMarkup() async {
-    final value = double.tryParse(_markupController.text);
-    if (value == null || value < 0) {
-      setState(() => _markupError = 'Enter 0 or more.');
-      return;
-    }
-    FocusManager.instance.primaryFocus?.unfocus();
-    setState(() {
-      _savingMarkup = true;
-      _markupError = null;
-    });
-    final error = await widget.store.updateMarkupPercent(value);
+  void _feedback(String message) {
     if (!mounted) return;
-    setState(() => _savingMarkup = false);
-    if (error != null) {
-      setState(() => _markupError = error);
-      return;
-    }
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Default markup updated.')));
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _chooseTheme() async {
+    final choice = await showModalBottomSheet<ThemeChoice>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * .8,
+          ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Choose a theme',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Applies across SariScan and stays saved on this phone.',
+                ),
+                const SizedBox(height: 16),
+                for (final choice in ThemeChoice.values)
+                  ListTile(
+                    key: ValueKey('theme-${choice.name}'),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    selected: widget.store.themeChoice == choice,
+                    selectedColor: AppTheme.of(context).emeraldDeep,
+                    selectedTileColor: AppTheme.of(context).mint,
+                    leading: CircleAvatar(
+                      backgroundColor: AppPalette.forChoice(choice).base,
+                      child: Icon(
+                        choice == ThemeChoice.dark
+                            ? Icons.dark_mode_outlined
+                            : Icons.palette_outlined,
+                        color: AppPalette.forChoice(choice).emeraldDeep,
+                      ),
+                    ),
+                    title: Text(choice.label),
+                    subtitle: choice == ThemeChoice.defaultTheme
+                        ? const Text('Original SariScan green')
+                        : null,
+                    trailing: Icon(
+                      widget.store.themeChoice == choice
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_unchecked,
+                      color: widget.store.themeChoice == choice
+                          ? AppTheme.of(context).emeraldDeep
+                          : AppTheme.of(context).muted,
+                    ),
+                    onTap: () => Navigator.pop(context, choice),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (!mounted || choice == null) return;
+    setState(() => _savingTheme = true);
+    final error = await widget.store.updateTheme(choice);
+    if (!mounted) return;
+    setState(() => _savingTheme = false);
+    _feedback(error ?? '${choice.label} theme saved.');
+  }
+
+  Future<void> _editMarkup() async {
+    final saved = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _MarkupDialog(store: widget.store),
+    );
+    if (saved == true) _feedback('Default markup updated.');
+  }
+
+  Future<void> _showInfo(String title, List<Widget> content) =>
+      showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          scrollable: true,
+          title: Text(title),
+          content: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: content,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Done'),
+            ),
+          ],
+        ),
+      );
+
+  Future<void> _confirmLogout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Log out of SariScan?'),
+        content: const Text(
+          'Your saved store data will stay on this phone. '
+          'Your current cart will be cleared. Use phone security to sign in again.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Log out'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await widget.store.logout();
+    if (!mounted) return;
+    Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
   Future<void> _changeName() async {
@@ -76,8 +176,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ChangeNameDialog(initialName: widget.store.registeredOwnerName ?? ''),
     );
     if (!mounted || newName == null) return;
+    setState(() => _savingName = true);
     final error = await widget.store.renameOwner(newName);
     if (!mounted) return;
+    setState(() => _savingName = false);
     if (error != null) {
       ScaffoldMessenger.of(
         context,
@@ -110,9 +212,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          count == 0
-              ? 'All photos are already synced.'
-              : '$count photo(s) uploaded.',
+          widget.store.photoSyncWarning ??
+              '$count photo(s) uploaded. Next, tap Sync store > Upload changes '
+                  'to share photo links, then Download latest on the other phone.',
         ),
       ),
     );
@@ -128,7 +230,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       showDragHandle: true,
       builder: (context) => SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -187,7 +289,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   title: const Text('Unlink this phone'),
                   subtitle: const Text(
-                    'Stop syncing without deleting cloud data',
+                    'Clear this phone; keep the store in the cloud',
                   ),
                   onTap: () => Navigator.pop(context, _SyncAction.leave),
                 ),
@@ -288,7 +390,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       SnackBar(
         content: Text(
           result.isSuccess
-              ? successMessage
+              ? '$successMessage${result.warning == null ? '' : ' ${result.warning}'}'
               : (result.error ?? 'Something went wrong.'),
         ),
       ),
@@ -334,7 +436,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (result.isSuccess) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Joined and downloaded cloud data.')),
+        SnackBar(
+          content: Text(
+            'Joined and downloaded cloud data.'
+            '${result.warning == null ? '' : ' ${result.warning}'}',
+          ),
+        ),
       );
       return;
     }
@@ -345,7 +452,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Sync code not found'),
+        title: const Text('Could not join store'),
         content: Text(
           result.error ?? 'Store not found. Check the sync code and try again.',
         ),
@@ -365,7 +472,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Unlink this phone?'),
         content: const Text(
-          'Stop syncing this phone. Cloud data and other phones are unaffected.',
+          'Remove all store records and cached product photos from this phone. '
+          'Changes you have not uploaded will be lost. Cloud data stays saved. '
+          'Keep your sync code to download the store again.',
         ),
         actions: [
           TextButton(
@@ -382,283 +491,719 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
-    if (confirmed != true) return;
-    await widget.store.leaveCloudSync();
+    if (confirmed != true || !mounted) return;
+    setState(() => _syncing = true);
+    final error = await widget.store.leaveCloudSync();
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Phone unlinked.')));
+    setState(() => _syncing = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          error ??
+              'Phone cleared and unlinked. Your cloud store is still saved.',
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: widget.store,
-      builder: (context, _) => Scaffold(
-        appBar: AppBar(title: const Text('Settings')),
-        body: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-          children: [
-            const SectionHeading(
-              'Pricing',
-              subtitle: 'Suggested selling prices',
-            ),
-            const SizedBox(height: 12),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(18),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+      builder: (context, _) {
+        final palette = AppTheme.of(context);
+        final linked = widget.store.syncCode != null;
+        return Scaffold(
+          appBar: AppBar(title: const Text('Settings')),
+          body: SafeArea(
+            top: false,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 680),
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
                   children: [
-                    const Text(
-                      'Add a markup to cost to suggest selling prices. '
-                      'Adjust the price for each product as needed.',
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        color: AppTheme.muted,
-                        height: 1.5,
+                    // A store identity header, distinct from the preference groups.
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(4, 8, 4, 24),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const BrandMark(size: 52),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'YOUR STORE',
+                                  style: Theme.of(context).textTheme.labelMedium
+                                      ?.copyWith(
+                                        color: palette.muted,
+                                        letterSpacing: 1.2,
+                                      ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  widget.store.registeredOwnerName ??
+                                      'Store Owner',
+                                  style: Theme.of(context).textTheme.titleLarge,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Make SariScan work for your store.',
+                                  style: TextStyle(
+                                    color: palette.muted,
+                                    fontSize: 13,
+                                    height: 1.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: _markupController,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(
-                          RegExp(r'^\d*\.?\d{0,2}'),
+                    _SettingsGroup(
+                      title: 'Store account',
+                      children: [
+                        _SettingsRow(
+                          icon: Icons.storefront_outlined,
+                          title: 'Store name',
+                          description:
+                              widget.store.registeredOwnerName ??
+                              'No store registered',
+                          busy: _savingName,
+                          onTap: _busy || !widget.store.hasLocalAccount
+                              ? null
+                              : _changeName,
+                        ),
+                        _SettingsRow(
+                          icon: Icons.lock_outline_rounded,
+                          title: 'Phone security',
+                          description: 'Protected by your device lock',
+                          onTap: () => _showInfo('Phone security', const [
+                            Text(
+                              'SariScan uses your phone\'s fingerprint, face unlock, PIN, '
+                              'pattern, or password when you sign in.',
+                            ),
+                            SizedBox(height: 16),
+                            Text(
+                              'Manage these methods in your phone settings. '
+                              'There is no separate SariScan password.',
+                            ),
+                          ]),
                         ),
                       ],
-                      decoration: InputDecoration(
-                        labelText: 'Default markup',
-                        suffixText: '%',
-                        prefixIcon: const Icon(Icons.percent_rounded),
-                        errorText: _markupError,
-                      ),
-                      onChanged: (_) {
-                        setState(() {
-                          if (_markupError != null) _markupError = null;
-                        });
-                      },
                     ),
-                    const SizedBox(height: 10),
-                    Text(
-                      '${money(100)} cost → '
-                      '${money(100 * (1 + _previewMarkup / 100))} suggested price',
-                      style: const TextStyle(
-                        fontSize: 11.5,
-                        color: AppTheme.muted,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    FilledButton.icon(
-                      onPressed: _savingMarkup ? null : _saveMarkup,
-                      icon: _savingMarkup
-                          ? const SizedBox.square(
-                              dimension: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Icon(Icons.save_outlined),
-                      label: Text(_savingMarkup ? 'Saving...' : 'Save markup'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-            const SectionHeading(
-              'Cloud sync',
-              subtitle: 'Share store data across phones',
-            ),
-            const SizedBox(height: 12),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(18),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (!widget.store.isCloudSyncAvailable)
-                      const Text(
-                        'Cloud sync unavailable.',
-                        style: TextStyle(fontSize: 12.5, color: AppTheme.muted),
-                      )
-                    else ...[
-                      Text(
-                        widget.store.syncCode == null
-                            ? 'Create or enter a sync code to link phones. '
-                                  'Upload or download changes using Sync.'
-                            : 'Use this code to link other phones. '
-                                  'Upload or download changes using Sync.',
-                        style: const TextStyle(
-                          fontSize: 12.5,
-                          color: AppTheme.muted,
-                          height: 1.5,
+                    _SettingsGroup(
+                      title: 'Preferences',
+                      children: [
+                        _SettingsRow(
+                          icon: Icons.palette_outlined,
+                          title: 'Appearance',
+                          description:
+                              '${widget.store.themeChoice.label} theme',
+                          busy: _savingTheme,
+                          onTap: _busy ? null : _chooseTheme,
                         ),
-                      ),
-                      if (widget.store.syncCode != null) ...[
-                        const SizedBox(height: 14),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 12,
+                        _SettingsRow(
+                          icon: Icons.percent_rounded,
+                          title: 'Default markup',
+                          description:
+                              '${_formatPercent(widget.store.markupPercent)}% added to cost for suggested prices',
+                          onTap: _busy ? null : _editMarkup,
+                        ),
+                      ],
+                    ),
+                    const SectionHeading('Data & sync'),
+                    const SizedBox(height: 12),
+                    Card(
+                      elevation: 1,
+                      clipBehavior: Clip.antiAlias,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _SettingsRow(
+                            icon: widget.store.storageError == null
+                                ? Icons.offline_pin_outlined
+                                : Icons.error_outline_rounded,
+                            title: widget.store.storageError == null
+                                ? 'Available offline'
+                                : 'Storage needs attention',
+                            description:
+                                widget.store.storageError ??
+                                'Products, sales, and customer balances stay on this phone.',
+                            onTap: () => _showInfo('Your store data', [
+                              const Text(
+                                'Your store records are saved on this phone so you can keep selling offline.',
+                              ),
+                              const SizedBox(height: 16),
+                              const Text(
+                                'Cloud sync is manual. Upload your changes before downloading on another phone. '
+                                'A download replaces the receiving phone\'s records.',
+                              ),
+                              if (widget.store.storageError != null) ...[
+                                const SizedBox(height: 16),
+                                Text(
+                                  widget.store.storageError!,
+                                  style: TextStyle(color: palette.danger),
+                                ),
+                              ],
+                            ]),
                           ),
-                          decoration: BoxDecoration(
-                            color: AppTheme.canvas,
-                            borderRadius: BorderRadius.circular(14),
+                          const Divider(height: 1, indent: 64, endIndent: 16),
+                          Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.cloud_sync_outlined,
+                                      color: palette.emeraldDeep,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        'Cloud sync',
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.titleMedium,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  !widget.store.isCloudSyncAvailable
+                                      ? 'Unavailable right now. You can continue using your store offline.'
+                                      : linked
+                                      ? 'Linked to your cloud store. Sync when you are ready.'
+                                      : 'Link your phones with a sync code to share store records.',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    height: 1.5,
+                                    color: palette.muted,
+                                  ),
+                                ),
+                                if (linked) ...[
+                                  const SizedBox(height: 14),
+                                  Container(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      14,
+                                      8,
+                                      4,
+                                      8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: palette.baseSunken,
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                'SYNC CODE',
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .labelSmall
+                                                    ?.copyWith(
+                                                      color: palette.muted,
+                                                      letterSpacing: 1,
+                                                    ),
+                                              ),
+                                              const SizedBox(height: 4),
+                                              SelectableText(
+                                                widget.store.syncCode!,
+                                                style: const TextStyle(
+                                                  fontFamily: 'SpaceGrotesk',
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 18,
+                                                  letterSpacing: 1,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        IconButton(
+                                          tooltip: 'Copy sync code',
+                                          onPressed: () async {
+                                            try {
+                                              await Clipboard.setData(
+                                                ClipboardData(
+                                                  text: widget.store.syncCode!,
+                                                ),
+                                              );
+                                              _feedback('Sync code copied.');
+                                            } catch (_) {
+                                              _feedback(
+                                                'Could not copy the code. Try again.',
+                                              );
+                                            }
+                                          },
+                                          icon: const Icon(
+                                            Icons.copy_rounded,
+                                            size: 20,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    widget.store.lastSyncedAt == null
+                                        ? 'No sync recorded yet'
+                                        : 'Last synced ${shortDateTime(widget.store.lastSyncedAt!)}',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: palette.muted,
+                                    ),
+                                  ),
+                                ],
+                                if (widget.store.isCloudSyncAvailable) ...[
+                                  const SizedBox(height: 16),
+                                  FilledButton.icon(
+                                    onPressed: _busy ? null : _openSyncSheet,
+                                    icon: _syncing
+                                        ? const _SettingsProgress()
+                                        : const Icon(Icons.sync_rounded),
+                                    label: Text(
+                                      _syncing
+                                          ? 'Syncing store...'
+                                          : linked
+                                          ? 'Sync store'
+                                          : 'Set up cloud sync',
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
                           ),
-                          child: Row(
-                            children: [
-                              Expanded(
+                          if (widget.store.isImageSyncAvailable) ...[
+                            const Divider(height: 1, indent: 64, endIndent: 16),
+                            _SettingsRow(
+                              icon: Icons.add_photo_alternate_outlined,
+                              title: 'Upload product photos',
+                              description: !linked
+                                  ? 'Set up cloud sync to share photos'
+                                  : _backfillingPhotos
+                                  ? 'Uploading photos...'
+                                  : 'Retry photos, then sync to share their links',
+                              busy: _backfillingPhotos,
+                              onTap: _busy || !linked ? null : _backfillPhotos,
+                            ),
+                            if (widget.store.photoSyncWarning != null)
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  0,
+                                  16,
+                                  16,
+                                ),
                                 child: Text(
-                                  widget.store.syncCode!,
-                                  style: const TextStyle(
-                                    fontFamily: 'SpaceGrotesk',
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 2,
+                                  widget.store.photoSyncWarning!,
+                                  style: TextStyle(
+                                    color: palette.danger,
+                                    height: 1.5,
                                   ),
                                 ),
                               ),
-                              IconButton(
-                                tooltip: 'Copy sync code',
-                                onPressed: () {
-                                  Clipboard.setData(
-                                    ClipboardData(text: widget.store.syncCode!),
-                                  );
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Sync code copied.'),
-                                    ),
-                                  );
-                                },
-                                icon: const Icon(Icons.copy_rounded, size: 20),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    _SettingsGroup(
+                      title: 'Help & information',
+                      children: [
+                        _SettingsRow(
+                          icon: Icons.help_outline_rounded,
+                          title: 'Help & FAQ',
+                          description: 'Pricing, backups, and switching phones',
+                          onTap: () => _showInfo('Help & FAQ', const [
+                            _HelpAnswer(
+                              'How does markup work?',
+                              'A 10% markup on a ₱100 cost suggests a ₱110 selling price. You can still set each product\'s price yourself.',
+                            ),
+                            _HelpAnswer(
+                              'How do I use another phone?',
+                              'Create a sync code on the phone with your store data. Join with that code on the other phone. Joining replaces its local records.',
+                            ),
+                            _HelpAnswer(
+                              'When should I sync?',
+                              'Upload after making changes, then download on the other phone. Sync is manual; avoid editing both phones before syncing.',
+                            ),
+                            _HelpAnswer(
+                              'Why are photos missing?',
+                              'Use Upload product photos, then Sync store > Upload changes. On the other phone, choose Download latest.',
+                            ),
+                            _HelpAnswer(
+                              'What happens when I log out?',
+                              'Saved records stay on this phone. The current cart is cleared, and signing in again requires phone security.',
+                            ),
+                          ]),
+                        ),
+                        _SettingsRow(
+                          icon: Icons.info_outline_rounded,
+                          title: 'About SariScan',
+                          description: 'Scan. Sell. Track.',
+                          onTap: () => showAboutDialog(
+                            context: context,
+                            applicationName: 'SariScan',
+                            applicationIcon: const BrandMark(),
+                            children: [
+                              const Text(
+                                'Your store\'s daily companion for products, sales, stock, '
+                                'and customer balances. Built to keep your store moving offline.',
                               ),
                             ],
                           ),
                         ),
-                        const SizedBox(height: 6),
-                        Text(
-                          widget.store.lastSyncedAt == null
-                              ? 'Not synced yet.'
-                              : 'Last synced '
-                                    '${shortDateTime(widget.store.lastSyncedAt!)}',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: AppTheme.muted,
-                          ),
-                        ),
                       ],
-                      const SizedBox(height: 16),
-                      FilledButton.icon(
-                        onPressed: _syncing ? null : _openSyncSheet,
-                        icon: _syncing
-                            ? const SizedBox.square(
-                                dimension: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Icon(Icons.sync_rounded),
-                        label: Text(_syncing ? 'Syncing...' : 'Sync'),
+                    ),
+                    const SectionHeading('Account actions'),
+                    const SizedBox(height: 8),
+                    _SettingsRow(
+                      icon: Icons.logout_rounded,
+                      title: 'Log out',
+                      description: 'Keep saved store data on this phone',
+                      onTap: _busy ? null : _confirmLogout,
+                    ),
+                    if (linked)
+                      _SettingsRow(
+                        icon: Icons.link_off_rounded,
+                        title: 'Unlink this phone',
+                        description:
+                            'Clear local records; keep your cloud store',
+                        destructive: true,
+                        onTap: _busy ? null : _confirmLeave,
                       ),
-                    ],
                   ],
                 ),
               ),
             ),
-            if (widget.store.isImageSyncAvailable) ...[
-              const SizedBox(height: 24),
-              const SectionHeading(
-                'Photo sync',
-                subtitle: 'Sync existing product photos',
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _MarkupDialog extends StatefulWidget {
+  const _MarkupDialog({required this.store});
+  final AppStore store;
+
+  @override
+  State<_MarkupDialog> createState() => _MarkupDialogState();
+}
+
+class _MarkupDialogState extends State<_MarkupDialog> {
+  late final TextEditingController _controller;
+  late double _savedValue;
+  String? _error;
+  bool _saving = false;
+  bool _confirmingDiscard = false;
+  bool _allowClose = false;
+
+  double? get _value => double.tryParse(_controller.text);
+  bool get _dirty => _value != _savedValue || _error != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _savedValue = widget.store.markupPercent;
+    _controller = TextEditingController(
+      text: _savedValue == _savedValue.roundToDouble()
+          ? _savedValue.toStringAsFixed(0)
+          : _savedValue.toString(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _close() async {
+    if (_saving || _confirmingDiscard) return;
+    if (_dirty) {
+      _confirmingDiscard = true;
+      final discard = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Discard markup changes?'),
+          content: const Text('Your new markup has not been saved.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Keep editing'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Discard'),
+            ),
+          ],
+        ),
+      );
+      _confirmingDiscard = false;
+      if (!mounted || discard != true) return;
+    }
+    if (!mounted) return;
+    setState(() => _allowClose = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) Navigator.pop(context);
+    });
+  }
+
+  Future<void> _save() async {
+    final value = _value;
+    if (value == null ||
+        !value.isFinite ||
+        value < 0 ||
+        !(100 * (1 + value / 100)).isFinite) {
+      setState(() => _error = 'Enter a valid percentage of 0 or more.');
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    final error = await widget.store.updateMarkupPercent(value);
+    if (!mounted) return;
+    if (error != null) {
+      setState(() {
+        _saving = false;
+        _error = error;
+      });
+      return;
+    }
+    setState(() {
+      _savedValue = value;
+      _saving = false;
+      _allowClose = true;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) Navigator.pop(context, true);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final preview = _value;
+    return PopScope(
+      canPop: _allowClose || (!_dirty && !_saving),
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _close();
+      },
+      child: AlertDialog(
+        scrollable: true,
+        title: const Text('Default markup'),
+        content: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Add a percentage to cost to suggest selling prices. '
+              'Existing product prices stay the same.',
+            ),
+            const SizedBox(height: 20),
+            TextField(
+              controller: _controller,
+              enabled: !_saving,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
               ),
-              const SizedBox(height: 12),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(18),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const Text(
-                        'Upload existing photos to share across phones. '
-                        'New photos upload automatically when saved.',
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          color: AppTheme.muted,
-                          height: 1.5,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      FilledButton.icon(
-                        onPressed: _backfillingPhotos ? null : _backfillPhotos,
-                        icon: _backfillingPhotos
-                            ? const SizedBox.square(
-                                dimension: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Icon(Icons.cloud_upload_outlined),
-                        label: Text(
-                          _backfillingPhotos ? 'Uploading...' : 'Upload photos',
-                        ),
-                      ),
-                    ],
-                  ),
+              textInputAction: TextInputAction.done,
+              inputFormatters: [
+                TextInputFormatter.withFunction(
+                  (oldValue, newValue) =>
+                      RegExp(r'^\d*\.?\d{0,2}$').hasMatch(newValue.text)
+                      ? newValue
+                      : oldValue,
                 ),
+              ],
+              decoration: InputDecoration(
+                labelText: 'Markup',
+                suffixText: '%',
+                prefixIcon: const Icon(Icons.percent_rounded),
+                errorText: _error,
+                errorMaxLines: 5,
               ),
-            ],
-            const SizedBox(height: 24),
-            const SectionHeading('Store account', subtitle: 'Store details'),
-            const SizedBox(height: 12),
-            Card(
+              onChanged: (_) => setState(() => _error = null),
+              onSubmitted: (_) {
+                if (!_saving && _dirty) _save();
+              },
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppTheme.of(context).baseSunken,
+                borderRadius: BorderRadius.circular(14),
+              ),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  ListTile(
-                    leading: const CircleAvatar(
-                      child: Icon(Icons.storefront_outlined),
-                    ),
-                    title: Text(widget.store.currentUserName ?? 'Store Owner'),
-                    subtitle: const Text('Protected by phone security'),
-                    trailing: TextButton(
-                      onPressed: _changeName,
-                      child: const Text('Change'),
-                    ),
+                  Text(
+                    'PRICE PREVIEW',
+                    style: Theme.of(context).textTheme.labelSmall,
                   ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: Icon(
-                      widget.store.storageError == null
-                          ? Icons.phone_android_rounded
-                          : Icons.error_outline_rounded,
-                      color: widget.store.storageError == null
-                          ? AppTheme.emerald
-                          : Theme.of(context).colorScheme.error,
-                    ),
-                    title: Text(
-                      widget.store.storageError == null
-                          ? 'Saved on this phone'
-                          : 'Storage error',
-                    ),
-                    subtitle: Text(
-                      widget.store.storageError ??
-                          'Store data is available offline.',
-                    ),
+                  const SizedBox(height: 6),
+                  Text(
+                    preview == null ||
+                            !preview.isFinite ||
+                            !(100 * (1 + preview / 100)).isFinite
+                        ? 'Enter a markup to preview a price.'
+                        : '${money(100)} cost → ${money(100 * (1 + preview / 100))} selling price',
+                    style: const TextStyle(fontSize: 14, height: 1.5),
                   ),
                 ],
               ),
             ),
+            const SizedBox(height: 12),
+            Text(
+              _saving
+                  ? 'Saving markup...'
+                  : _dirty
+                  ? 'Unsaved changes'
+                  : 'Saved on this phone',
+              style: TextStyle(fontSize: 12, color: AppTheme.of(context).muted),
+            ),
           ],
         ),
+        actions: [
+          TextButton(
+            onPressed: _saving ? null : _close,
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: _saving || !_dirty ? null : _save,
+            child: Text(_saving ? 'Saving...' : 'Save markup'),
+          ),
+        ],
       ),
     );
   }
+}
+
+class _SettingsGroup extends StatelessWidget {
+  const _SettingsGroup({required this.title, required this.children});
+  final String title;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 24),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionHeading(title),
+        const SizedBox(height: 12),
+        Card(
+          elevation: 1,
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: [
+              for (var i = 0; i < children.length; i++) ...[
+                if (i > 0) const Divider(height: 1, indent: 64, endIndent: 16),
+                children[i],
+              ],
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _SettingsRow extends StatelessWidget {
+  const _SettingsRow({
+    required this.icon,
+    required this.title,
+    required this.description,
+    this.onTap,
+    this.busy = false,
+    this.destructive = false,
+  });
+  final IconData icon;
+  final String title;
+  final String description;
+  final VoidCallback? onTap;
+  final bool busy;
+  final bool destructive;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = AppTheme.of(context);
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      minVerticalPadding: 12,
+      minLeadingWidth: 32,
+      titleAlignment: ListTileTitleAlignment.top,
+      leading: Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Icon(
+          icon,
+          color: destructive ? palette.danger : palette.emeraldDeep,
+        ),
+      ),
+      title: Text(
+        title,
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
+          color: destructive ? palette.danger : palette.ink,
+        ),
+      ),
+      subtitle: Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Text(
+          description,
+          style: TextStyle(fontSize: 13, height: 1.45, color: palette.muted),
+        ),
+      ),
+      trailing: busy
+          ? const _SettingsProgress()
+          : onTap != null
+          ? Icon(Icons.chevron_right_rounded, color: palette.muted, size: 20)
+          : null,
+      onTap: onTap,
+    );
+  }
+}
+
+class _SettingsProgress extends StatelessWidget {
+  const _SettingsProgress();
+  @override
+  Widget build(BuildContext context) => const SizedBox.square(
+    dimension: 20,
+    child: CircularProgressIndicator(strokeWidth: 2),
+  );
+}
+
+class _HelpAnswer extends StatelessWidget {
+  const _HelpAnswer(this.question, this.answer);
+  final String question;
+  final String answer;
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 18),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(question, style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 6),
+        Text(answer, style: const TextStyle(height: 1.5)),
+      ],
+    ),
+  );
 }
 
 /// A dedicated dialog widget for entering a sync code.

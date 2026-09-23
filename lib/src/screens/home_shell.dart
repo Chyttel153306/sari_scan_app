@@ -144,9 +144,9 @@ class _HomeShellState extends State<HomeShell> {
                     ][_index],
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 10,
-                color: AppTheme.muted,
+                color: AppTheme.of(context).muted,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -169,10 +169,10 @@ class _HomeShellState extends State<HomeShell> {
       ),
       bottomNavigationBar: DecoratedBox(
         decoration: BoxDecoration(
-          color: AppTheme.base,
+          color: AppTheme.of(context).base,
           boxShadow: [
             BoxShadow(
-              color: AppTheme.baseDark.withValues(alpha: .7),
+              color: AppTheme.of(context).baseDark.withValues(alpha: .7),
               blurRadius: 18,
               offset: const Offset(0, -4),
             ),

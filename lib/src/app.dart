@@ -37,17 +37,15 @@ class _SariScanAppState extends State<SariScanApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'SariScan',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.light,
-      home: ListenableBuilder(
-        listenable: store,
-        builder: (context, _) {
-          return store.isAuthenticated
-              ? HomeShell(store: store)
-              : LoginScreen(store: store, phoneSecurity: _phoneSecurity);
-        },
+    return ListenableBuilder(
+      listenable: store,
+      builder: (context, _) => MaterialApp(
+        title: 'SariScan',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.forChoice(store.themeChoice),
+        home: store.isAuthenticated
+            ? HomeShell(store: store)
+            : LoginScreen(store: store, phoneSecurity: _phoneSecurity),
       ),
     );
   }

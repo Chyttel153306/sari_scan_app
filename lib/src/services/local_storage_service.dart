@@ -98,4 +98,16 @@ class LocalStorageService {
     final image = File(imagePath);
     if (await image.exists()) await image.delete();
   }
+
+  /// Clears only this app's managed photo cache, never cloud objects or
+  /// source photos selected from the phone's gallery.
+  Future<void> clearProductImages() async {
+    final directory = Directory(
+      '${file.parent.path}${Platform.pathSeparator}product_images',
+    );
+    if (!await directory.exists()) return;
+    await for (final entry in directory.list(followLinks: false)) {
+      if (entry is File || entry is Link) await entry.delete();
+    }
+  }
 }

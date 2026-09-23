@@ -35,8 +35,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
-    final nameError =
-        widget.store.validateOwnerName(_nameController.text);
+    final nameError = widget.store.validateOwnerName(_nameController.text);
 
     if (nameError != null) {
       setState(() => _error = nameError);
@@ -50,8 +49,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _error = null;
     });
 
-    final securityResult =
-        await widget.phoneSecurity.authenticate();
+    final securityResult = await widget.phoneSecurity.authenticate();
 
     if (!mounted) return;
 
@@ -63,9 +61,7 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    final error = await widget.store.openSecureSession(
-      _nameController.text,
-    );
+    final error = await widget.store.openSecureSession(_nameController.text);
 
     if (!mounted) return;
 
@@ -78,8 +74,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _forgotName() async {
     setState(() => _error = null);
 
-    final result =
-        await widget.phoneSecurity.authenticate();
+    final result = await widget.phoneSecurity.authenticate();
 
     if (!mounted) return;
 
@@ -88,8 +83,7 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    final name =
-        widget.store.registeredOwnerName ?? '';
+    final name = widget.store.registeredOwnerName ?? '';
 
     await showDialog<void>(
       context: context,
@@ -121,8 +115,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _changeName() async {
     setState(() => _error = null);
 
-    final result =
-        await widget.phoneSecurity.authenticate();
+    final result = await widget.phoneSecurity.authenticate();
 
     if (!mounted) return;
 
@@ -135,16 +128,14 @@ class _LoginScreenState extends State<LoginScreen> {
       context: context,
       builder: (dialogContext) {
         return ChangeNameDialog(
-          initialName:
-              widget.store.registeredOwnerName ?? '',
+          initialName: widget.store.registeredOwnerName ?? '',
         );
       },
     );
 
     if (!mounted || newName == null) return;
 
-    final error =
-        await widget.store.renameOwner(newName);
+    final error = await widget.store.renameOwner(newName);
 
     if (!mounted) return;
 
@@ -157,60 +148,48 @@ class _LoginScreenState extends State<LoginScreen> {
       _nameController.text = newName;
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Store name updated.'),
-      ),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Store name updated.')));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: RadialGradient(
             center: Alignment(0, -.7),
             radius: 1.2,
             colors: [
-              Color.fromARGB(255, 209, 250, 229),
-              Color(0xFFF8FAFC),
+              AppTheme.of(context).mint,
+              AppTheme.of(context).baseSunken,
             ],
           ),
         ),
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 24,
-                vertical: 32,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
               child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  maxWidth: 430,
-                ),
+                constraints: const BoxConstraints(maxWidth: 430),
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.stretch,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const Center(
-                      child: BrandMark(size: 84),
+                      child: BrandMark(
+                        size: 220,
+                        wordmark: true,
+                        showBackground: false,
+                      ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 12),
                     Text(
-                      'SariScan',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context)
-                          .textTheme
-                          .headlineLarge,
-                    ),
-                    const SizedBox(height: 6),
-                    const Text(
                       'Scan. Sell. Track',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 13,
-                        color: AppTheme.muted,
+                        color: AppTheme.of(context).muted,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -222,8 +201,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: Form(
                           key: _formKey,
                           child: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.stretch,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               const Text(
                                 'Welcome back! ',
@@ -234,63 +212,46 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ),
                               const SizedBox(height: 6),
-                              const Text(
+                              Text(
                                 "Let's get your store set up!.",
                                 style: TextStyle(
-                                  color: AppTheme.muted,
+                                  color: AppTheme.of(context).muted,
                                   fontSize: 15,
                                 ),
                               ),
                               const SizedBox(height: 24),
                               TextFormField(
-                                controller:
-                                    _nameController,
-                                textCapitalization:
-                                    TextCapitalization.words,
-                                textInputAction:
-                                    TextInputAction.done,
+                                controller: _nameController,
+                                textCapitalization: TextCapitalization.words,
+                                textInputAction: TextInputAction.done,
                                 onFieldSubmitted: (_) =>
-                                    _submitting
-                                        ? null
-                                        : _submit(),
-                                decoration:
-                                    const InputDecoration(
+                                    _submitting ? null : _submit(),
+                                decoration: const InputDecoration(
                                   labelText: 'Store Name',
-                                  hintText:
-                                      'Example: Aaron Store',
+                                  hintText: 'Example: Aaron Store',
                                   prefixIcon: Icon(
                                     Icons.person_outline,
                                     size: 20,
                                   ),
                                 ),
                                 validator: (value) =>
-                                    value == null ||
-                                            value
-                                                .trim()
-                                                .isEmpty
-                                        ? 'Enter your name.'
-                                        : null,
+                                    value == null || value.trim().isEmpty
+                                    ? 'Enter your name.'
+                                    : null,
                               ),
                               const SizedBox(height: 18),
                               Container(
-                                padding:
-                                    const EdgeInsets.all(14),
-                                decoration:
-                                    BoxDecoration(
-                                  color: AppTheme.canvas,
-                                  borderRadius:
-                                      BorderRadius.circular(
-                                    14,
-                                  ),
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.of(context).canvas,
+                                  borderRadius: BorderRadius.circular(14),
                                 ),
-                                child: const Row(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Icon(
                                       Icons.fingerprint,
-                                      color:
-                                          AppTheme.emerald,
+                                      color: AppTheme.of(context).emerald,
                                       size: 26,
                                     ),
                                     SizedBox(width: 10),
@@ -300,8 +261,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                         style: TextStyle(
                                           fontSize: 13.75,
                                           height: 1.65,
-                                          color:
-                                              AppTheme.muted,
+                                          color: AppTheme.of(context).muted,
                                         ),
                                       ),
                                     ),
@@ -310,78 +270,58 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                               if (_error != null)
                                 Padding(
-                                  padding:
-                                      const EdgeInsets.only(
-                                    top: 14,
-                                  ),
+                                  padding: const EdgeInsets.only(top: 14),
                                   child: Text(
                                     _error!,
                                     style: TextStyle(
-                                      color:
-                                          Theme.of(context)
-                                              .colorScheme
-                                              .error,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.error,
                                       fontSize: 15,
                                     ),
                                   ),
                                 ),
                               const SizedBox(height: 22),
                               FilledButton.icon(
-                                onPressed: _submitting
-                                    ? null
-                                    : _submit,
+                                onPressed: _submitting ? null : _submit,
                                 icon: _submitting
                                     ? const SizedBox.square(
                                         dimension: 18,
-                                        child:
-                                            CircularProgressIndicator(
+                                        child: CircularProgressIndicator(
                                           strokeWidth: 2,
-                                          color:
-                                              Colors.white,
+                                          color: Colors.white,
                                         ),
                                       )
-                                    : const Icon(
-                                        Icons.fingerprint,
-                                        size: 20,
-                                      ),
+                                    : const Icon(Icons.fingerprint, size: 20),
                                 label: Text(
                                   _submitting
                                       ? 'Checking phone security...'
                                       : 'Continue with Phone Security',
-                                  textAlign:
-                                      TextAlign.center,
+                                  textAlign: TextAlign.center,
                                 ),
                               ),
-                              if (widget
-                                  .store
-                                  .hasLocalAccount) ...[
+                              if (widget.store.hasLocalAccount) ...[
                                 const SizedBox(height: 14),
                                 Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.center,
+                                  mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     TextButton(
                                       onPressed: _submitting
                                           ? null
                                           : _forgotName,
-                                      child: const Text(
-                                        'Forgot name?',
-                                      ),
+                                      child: const Text('Forgot name?'),
                                     ),
-                                    const Text(
+                                    Text(
                                       '•',
                                       style: TextStyle(
-                                        color:
-                                            AppTheme.muted,
+                                        color: AppTheme.of(context).muted,
                                       ),
                                     ),
                                     TextButton(
                                       onPressed: _submitting
                                           ? null
                                           : _changeName,
-                                      child: const Text(
-                                        'Change name',
-                                      ),
+                                      child: const Text('Change name'),
                                     ),
                                   ],
                                 ),
@@ -392,9 +332,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                     const SizedBox(height: 28),
-                    const Icon(
+                    Icon(
                       Icons.shield_outlined,
-                      color: AppTheme.emerald,
+                      color: AppTheme.of(context).emerald,
                       size: 20,
                     ),
                     const SizedBox(height: 8),
@@ -402,9 +342,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       widget.store.storageError ??
                           'Offline mode: all stored data stays on this phone.',
                       textAlign: TextAlign.center,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall,
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],
                 ),
@@ -417,27 +355,21 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-
 /// Dedicated dialog widget for changing the store name.
 ///
 /// The TextEditingController belongs to this widget's State,
 /// so it stays alive for the entire lifetime of the dialog and
 /// is disposed only when the dialog widget itself is disposed.
 class ChangeNameDialog extends StatefulWidget {
-  const ChangeNameDialog({
-    super.key,
-    required this.initialName,
-  });
+  const ChangeNameDialog({super.key, required this.initialName});
 
   final String initialName;
 
   @override
-  State<ChangeNameDialog> createState() =>
-      _ChangeNameDialogState();
+  State<ChangeNameDialog> createState() => _ChangeNameDialogState();
 }
 
-class _ChangeNameDialogState
-    extends State<ChangeNameDialog> {
+class _ChangeNameDialogState extends State<ChangeNameDialog> {
   late final TextEditingController _controller;
   final _formKey = GlobalKey<FormState>();
 
@@ -445,9 +377,7 @@ class _ChangeNameDialogState
   void initState() {
     super.initState();
 
-    _controller = TextEditingController(
-      text: widget.initialName,
-    );
+    _controller = TextEditingController(text: widget.initialName);
   }
 
   @override
@@ -479,15 +409,11 @@ class _ChangeNameDialogState
         key: _formKey,
         child: TextFormField(
           controller: _controller,
-          textCapitalization:
-              TextCapitalization.words,
+          textCapitalization: TextCapitalization.words,
           textInputAction: TextInputAction.done,
-          decoration: const InputDecoration(
-            labelText: 'New store name',
-          ),
+          decoration: const InputDecoration(labelText: 'New store name'),
           validator: (value) {
-            if (value == null ||
-                value.trim().isEmpty) {
+            if (value == null || value.trim().isEmpty) {
               return 'Enter a store name.';
             }
 
@@ -497,14 +423,8 @@ class _ChangeNameDialogState
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: _cancel,
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: _save,
-          child: const Text('Save'),
-        ),
+        TextButton(onPressed: _cancel, child: const Text('Cancel')),
+        FilledButton(onPressed: _save, child: const Text('Save')),
       ],
     );
   }
