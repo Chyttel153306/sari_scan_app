@@ -48,10 +48,16 @@ class CatalogProductCard extends StatelessWidget {
                       color: AppTheme.canvas,
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(8, 30, 8, 6),
-                        child: ProductImage(
-                          imagePath: product.imagePath,
-                          fit: BoxFit.contain,
-                          placeholderSize: 34,
+                        child: LayoutBuilder(
+                          builder: (context, constraints) => ProductImage(
+                            imagePath: product.imagePath,
+                            fit: BoxFit.contain,
+                            placeholderSize: 34,
+                            cacheWidth:
+                                (constraints.maxWidth *
+                                        MediaQuery.devicePixelRatioOf(context))
+                                    .ceil(),
+                          ),
                         ),
                       ),
                     ),
@@ -202,7 +208,7 @@ class CatalogProductCard extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(width: 2),
+            if (inventory) const SizedBox(width: 2),
             if (inventory)
               IconButton.filledTonal(
                 tooltip: 'Add stock',
@@ -213,13 +219,6 @@ class CatalogProductCard extends StatelessWidget {
                   foregroundColor: const Color(0xFF047857),
                   shape: const CircleBorder(),
                 ),
-              )
-            else
-              IconButton.filled(
-                tooltip: 'Add to cart',
-                onPressed: onAdd,
-                icon: Icon(onAdd == null ? Icons.block : Icons.add, size: 23),
-                style: IconButton.styleFrom(shape: const CircleBorder()),
               ),
           ],
         ),

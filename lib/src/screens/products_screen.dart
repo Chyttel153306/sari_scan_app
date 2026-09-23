@@ -4,6 +4,7 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:image_picker/image_picker.dart';
 
 import '../models/models.dart';
+import '../services/product_photo_suggestion.dart';
 import '../store/app_store.dart';
 import '../widgets/product_image.dart';
 import '../widgets/catalog_product_card.dart';
@@ -349,13 +350,6 @@ class _AddStockDialogState extends State<AddStockDialog> {
   }
 }
 
-class _PhotoSuggestion {
-  const _PhotoSuggestion({this.name, this.category});
-
-  final String? name;
-  final String? category;
-}
-
 class ProductDialog extends StatefulWidget {
   const ProductDialog({
     super.key,
@@ -405,6 +399,10 @@ class _ProductDialogState extends State<ProductDialog> {
 
   String? _imagePath;
   bool _recognizingPhoto = false;
+  int _photoReadId = 0;
+  String? _suggestedName;
+  String? _suggestedCategory;
+  String? _photoMessage;
   bool _saving = false;
 
   @override
@@ -636,140 +634,82 @@ class _ProductDialogState extends State<ProductDialog> {
     if (source == null) return;
     final photo = await _imagePicker.pickImage(
       source: source,
-      maxWidth: 1400,
-      imageQuality: 86,
+      maxWidth: 2400,
+      maxHeight: 2400,
+      imageQuality: 95,
     );
     if (photo == null || !mounted) return;
-    setState(() => _imagePath = photo.path);
+    _setPhoto(photo.path);
     await _suggestProductDetailsFromPhoto(photo.path);
+  }
+
+  void _setPhoto(String? path) {
+    setState(() {
+      _photoReadId++;
+      _imagePath = path;
+      _recognizingPhoto = false;
+      _photoMessage = null;
+      // Clear untouched suggestions when replacing a photo, but keep user edits.
+      if (_suggestedName != null && _name.text == _suggestedName) {
+        _name.clear();
+      }
+      if (_suggestedCategory != null && _category.text == _suggestedCategory) {
+        _category.clear();
+      }
+      _suggestedName = null;
+      _suggestedCategory = null;
+    });
   }
 
   /// Uses on-device OCR to suggest details from packaging. The editable
   /// fields remain the source of truth when the text is incomplete.
   Future<void> _suggestProductDetailsFromPhoto(String path) async {
-    setState(() => _recognizingPhoto = true);
+    final readId = ++_photoReadId;
+    setState(() {
+      _recognizingPhoto = true;
+      _photoMessage = null;
+    });
     final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
     try {
       final recognized = await recognizer.processImage(
         InputImage.fromFilePath(path),
       );
-      final suggestion = _suggestFromRecognizedText(recognized);
-      if (!mounted || _imagePath != path) return;
+      if (!mounted || readId != _photoReadId) return;
+      final suggestion = suggestProductFromPhoto(
+        recognized,
+        products: widget.store.products,
+      );
 
       var applied = false;
       setState(() {
         if (_name.text.trim().isEmpty && suggestion.name != null) {
           _name.text = suggestion.name!;
+          _suggestedName = suggestion.name;
           applied = true;
         }
         if (_category.text.trim().isEmpty && suggestion.category != null) {
           _category.text = suggestion.category!;
+          _suggestedCategory = suggestion.category;
           applied = true;
         }
         _recognizingPhoto = false;
+        _photoMessage = applied
+            ? 'Name suggested. Check the brand, variant, and size.'
+            : suggestion.name == null
+            ? 'No clear name found. Retake the front label or enter it manually.'
+            : null;
       });
-      if (applied && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Product details suggested from the photo. Please review them.',
-            ),
-          ),
-        );
-      }
     } catch (_) {
-      if (mounted && _imagePath == path) {
-        setState(() => _recognizingPhoto = false);
+      if (mounted && readId == _photoReadId) {
+        setState(() {
+          _recognizingPhoto = false;
+          _photoMessage = 'Could not read the label. Enter the name manually.';
+        });
       }
     } finally {
       await recognizer.close();
     }
   }
-
-  _PhotoSuggestion _suggestFromRecognizedText(RecognizedText recognized) {
-    final lines = [
-      for (final block in recognized.blocks)
-        for (final line in block.lines) _cleanRecognizedLine(line.text),
-    ].whereType<String>().toList();
-    if (lines.isEmpty) return const _PhotoSuggestion();
-
-    final allText = lines.join(' ').toLowerCase();
-    Product? matchingProduct;
-    var bestMatchCount = 0;
-    for (final product in widget.store.products) {
-      final productName = product.name.trim().toLowerCase();
-      if (productName.isEmpty) continue;
-      if (allText.contains(productName)) {
-        matchingProduct = product;
-        break;
-      }
-      final matches = productName
-          .split(RegExp(r'\s+'))
-          .where((word) => word.length >= 3 && allText.contains(word))
-          .length;
-      if (matches >= 2 && matches > bestMatchCount) {
-        matchingProduct = product;
-        bestMatchCount = matches;
-      }
-    }
-    if (matchingProduct != null) {
-      return _PhotoSuggestion(
-        name: matchingProduct.name,
-        category: matchingProduct.category,
-      );
-    }
-
-    final inferredCategory = _inferCategory(allText);
-    final nameLines = lines
-        .where(
-          (line) =>
-              line.length >= 3 &&
-              line.length <= 50 &&
-              RegExp(r'[A-Za-z]').hasMatch(line) &&
-              !RegExp(
-                r'^\D*\d+[\d.,]*\s*(g|kg|ml|l|oz|pcs?)?\D*$',
-                caseSensitive: false,
-              ).hasMatch(line),
-        )
-        .take(2)
-        .toList();
-    final name = nameLines.isEmpty ? null : _toTitleCase(nameLines.join(' '));
-    return _PhotoSuggestion(name: name, category: inferredCategory);
-  }
-
-  String? _cleanRecognizedLine(String value) {
-    final clean = value.replaceAll(RegExp(r'\s+'), ' ').trim();
-    return clean.isEmpty ? null : clean;
-  }
-
-  String? _inferCategory(String text) {
-    for (final category in _existingCategories) {
-      final normalized = category.trim().toLowerCase();
-      if (normalized.length >= 3 && text.contains(normalized)) return category;
-    }
-    const categories = {
-      'Drinks': ['drink', 'juice', 'coffee', 'tea', 'soda', 'water', 'milk'],
-      'Snacks': ['snack', 'chips', 'biscuit', 'cookie', 'cracker', 'candy'],
-      'Canned Goods': ['canned', 'sardine', 'tuna', 'corned beef'],
-      'Pantry': ['rice', 'noodle', 'pasta', 'flour', 'sugar', 'salt'],
-      'Personal Care': ['shampoo', 'soap', 'toothpaste', 'lotion'],
-      'Household': ['detergent', 'bleach', 'dishwashing', 'tissue'],
-    };
-    for (final entry in categories.entries) {
-      if (entry.value.any(text.contains)) return entry.key;
-    }
-    return null;
-  }
-
-  String _toTitleCase(String value) => value
-      .toLowerCase()
-      .split(RegExp(r'\s+'))
-      .map(
-        (word) => word.isEmpty
-            ? word
-            : '${word[0].toUpperCase()}${word.substring(1)}',
-      )
-      .join(' ');
 
   Future<void> _scanBarcode() async {
     final barcode = await Navigator.push<String>(
@@ -844,8 +784,7 @@ class _ProductDialogState extends State<ProductDialog> {
                             top: 8,
                             child: IconButton.filledTonal(
                               tooltip: 'Remove photo',
-                              onPressed: () =>
-                                  setState(() => _imagePath = null),
+                              onPressed: () => _setPhoto(null),
                               icon: const Icon(Icons.close_rounded),
                             ),
                           ),
@@ -865,6 +804,14 @@ class _ProductDialogState extends State<ProductDialog> {
                     SizedBox(width: 8),
                     Text('Reading product label…'),
                   ],
+                ),
+              ),
+            if (_photoMessage != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  _photoMessage!,
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),
             const SizedBox(height: 24),

@@ -64,17 +64,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       setState(() => _markupError = error);
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Default markup updated.')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Default markup updated.')));
   }
 
   Future<void> _changeName() async {
     final newName = await showDialog<String>(
       context: context,
-      builder: (_) => ChangeNameDialog(
-        initialName: widget.store.registeredOwnerName ?? '',
-      ),
+      builder: (_) =>
+          ChangeNameDialog(initialName: widget.store.registeredOwnerName ?? ''),
     );
     if (!mounted || newName == null) return;
     final error = await widget.store.renameOwner(newName);
@@ -85,9 +84,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ).showSnackBar(SnackBar(content: Text(error)));
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Store name updated.')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Store name updated.')));
   }
 
   // -----------------------------------------------------------------
@@ -99,11 +98,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// photos to other phones too.
   Future<void> _backfillPhotos() async {
     if (widget.store.syncCode == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Set up cloud sync first, then upload your photos.'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Set up cloud sync first.')));
       return;
     }
     setState(() => _backfillingPhotos = true);
@@ -115,7 +112,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         content: Text(
           count == 0
               ? 'All photos are already synced.'
-              : '$count photo(s) uploaded — they will now sync to other phones.',
+              : '$count photo(s) uploaded.',
         ),
       ),
     );
@@ -148,9 +145,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.cloud_upload_outlined),
-                  title: const Text('Create a new sync code'),
+                  title: const Text('Create sync code'),
                   subtitle: const Text(
-                    "Start cloud sync using this phone's current data",
+                    "Upload this phone's data to a new cloud store",
                   ),
                   onTap: () => Navigator.pop(context, _SyncAction.create),
                 ),
@@ -159,7 +156,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   leading: const Icon(Icons.link_rounded),
                   title: const Text('Join with a code'),
                   subtitle: const Text(
-                    'Use a code from another phone for this store',
+                    'Connect using another phone’s sync code',
                   ),
                   onTap: () => Navigator.pop(context, _SyncAction.join),
                 ),
@@ -167,9 +164,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.cloud_upload_outlined),
-                  title: const Text('Upload my changes'),
+                  title: const Text('Upload changes'),
                   subtitle: const Text(
-                    "Replace the cloud copy with what's on this phone",
+                    "Replace cloud data with this phone's data",
                   ),
                   onTap: () => Navigator.pop(context, _SyncAction.push),
                 ),
@@ -178,7 +175,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   leading: const Icon(Icons.cloud_download_outlined),
                   title: const Text('Download latest'),
                   subtitle: const Text(
-                    "Replace this phone's data with the cloud copy",
+                    "Replace this phone's data with cloud data",
                   ),
                   onTap: () => Navigator.pop(context, _SyncAction.pull),
                 ),
@@ -214,11 +211,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         await _confirmAndRun(
           title: 'Create sync code?',
           message:
-              'This uploads everything currently on this phone to a new '
-              'cloud store. Enter the resulting code on your other phones '
-              'to join it.',
+              "Upload this phone's data. Use the code to link other phones.",
           confirmLabel: 'Create',
-          successMessage: 'Sync code created — share it with your other phones.',
+          successMessage: 'Sync code created.',
           run: () => widget.store.startCloudSync(),
         );
         break;
@@ -229,8 +224,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         await _confirmAndRun(
           title: 'Upload to cloud?',
           message:
-              "This replaces the cloud copy with what's on this phone. "
-              'Other phones will get these changes next time they sync.',
+              "Replace cloud data with this phone's data. "
+              'Other phones receive changes on their next download.',
           confirmLabel: 'Upload',
           successMessage: 'Uploaded to cloud.',
           run: () => widget.store.pushToCloud(),
@@ -240,8 +235,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         await _confirmAndRun(
           title: 'Download from cloud?',
           message:
-              'This replaces everything on this phone with the cloud copy. '
-              "Anything changed here since the last sync will be lost.",
+              "Replace this phone's data with cloud data. "
+              'Unsynced changes will be lost.',
           confirmLabel: 'Download',
           isDestructive: true,
           successMessage: 'Downloaded from cloud.',
@@ -312,8 +307,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (context) => AlertDialog(
         title: const Text("Replace this phone's data?"),
         content: const Text(
-          'Joining will replace everything currently on this phone with '
-          'the cloud copy for that code. Make sure that\'s what you want.',
+          "Replace this phone's data with the linked store's cloud data. "
+          'Unsynced changes will be lost.',
         ),
         actions: [
           TextButton(
@@ -352,9 +347,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Sync code not found'),
         content: Text(
-          result.error ??
-              'No store was found for that sync code. Double-check the '
-                  'code and try again.',
+          result.error ?? 'Store not found. Check the sync code and try again.',
         ),
         actions: [
           FilledButton(
@@ -372,9 +365,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Unlink this phone?'),
         content: const Text(
-          'This phone will stop syncing with the cloud store. Your other '
-          'phones using the same code are not affected, and the cloud '
-          'data is not deleted.',
+          'Stop syncing this phone. Cloud data and other phones are unaffected.',
         ),
         actions: [
           TextButton(
@@ -394,11 +385,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (confirmed != true) return;
     await widget.store.leaveCloudSync();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('This phone is no longer linked to cloud sync.'),
-      ),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Phone unlinked.')));
   }
 
   @override
@@ -412,7 +401,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           children: [
             const SectionHeading(
               'Pricing',
-              subtitle: 'Controls the suggested selling price',
+              subtitle: 'Suggested selling prices',
             ),
             const SizedBox(height: 12),
             Card(
@@ -422,10 +411,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const Text(
-                      'When you enter a cost price on Add New Product, '
-                      'SariScan suggests a selling price automatically '
-                      'using this markup. You can still type in your own '
-                      'selling price for any product.',
+                      'Add a markup to cost to suggest selling prices. '
+                      'Adjust the price for each product as needed.',
                       style: TextStyle(
                         fontSize: 12.5,
                         color: AppTheme.muted,
@@ -457,8 +444,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      'Example: ${money(100)} cost → suggested selling '
-                      'price ${money(100 * (1 + _previewMarkup / 100))}',
+                      '${money(100)} cost → '
+                      '${money(100 * (1 + _previewMarkup / 100))} suggested price',
                       style: const TextStyle(
                         fontSize: 11.5,
                         color: AppTheme.muted,
@@ -485,7 +472,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 24),
             const SectionHeading(
               'Cloud sync',
-              subtitle: 'Keep multiple phones for this store in sync',
+              subtitle: 'Share store data across phones',
             ),
             const SizedBox(height: 12),
             Card(
@@ -496,20 +483,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   children: [
                     if (!widget.store.isCloudSyncAvailable)
                       const Text(
-                        'Cloud sync is not set up for this build yet.',
+                        'Cloud sync unavailable.',
                         style: TextStyle(fontSize: 12.5, color: AppTheme.muted),
                       )
                     else ...[
                       Text(
                         widget.store.syncCode == null
-                            ? 'This phone is not linked to a cloud sync yet. '
-                                  'Create a sync code here, then enter that '
-                                  'same code on your other phones to keep '
-                                  'them all up to date. Product photos sync '
-                                  'too, once this phone is linked.'
-                            : 'This phone is linked with the sync code '
-                                  'below. Share it with your other phones '
-                                  'for this store.',
+                            ? 'Create or enter a sync code to link phones. '
+                                  'Upload or download changes using Sync.'
+                            : 'Use this code to link other phones. '
+                                  'Upload or download changes using Sync.',
                         style: const TextStyle(
                           fontSize: 12.5,
                           color: AppTheme.muted,
@@ -592,7 +575,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const SizedBox(height: 24),
               const SectionHeading(
                 'Photo sync',
-                subtitle: 'Upload photos added before photo sync was set up',
+                subtitle: 'Sync existing product photos',
               ),
               const SizedBox(height: 12),
               Card(
@@ -602,11 +585,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const Text(
-                        'New product photos upload automatically when you '
-                        'save them. If a product still has a photo from '
-                        "before photo sync was set up, use this to upload "
-                        "it now so it starts following that product to "
-                        'other phones too.',
+                        'Upload existing photos to share across phones. '
+                        'New photos upload automatically when saved.',
                         style: TextStyle(
                           fontSize: 12.5,
                           color: AppTheme.muted,
@@ -626,9 +606,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               )
                             : const Icon(Icons.cloud_upload_outlined),
                         label: Text(
-                          _backfillingPhotos
-                              ? 'Uploading...'
-                              : 'Upload existing photos now',
+                          _backfillingPhotos ? 'Uploading...' : 'Upload photos',
                         ),
                       ),
                     ],
@@ -637,10 +615,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ],
             const SizedBox(height: 24),
-            const SectionHeading(
-              'Store account',
-              subtitle: 'Your registered store details',
-            ),
+            const SectionHeading('Store account', subtitle: 'Store details'),
             const SizedBox(height: 12),
             Card(
               child: Column(
@@ -669,12 +644,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     title: Text(
                       widget.store.storageError == null
                           ? 'Saved on this phone'
-                          : 'Phone storage needs attention',
+                          : 'Storage error',
                     ),
                     subtitle: Text(
                       widget.store.storageError ??
-                          'Products, customers, sales, and utang work '
-                              'offline.',
+                          'Store data is available offline.',
                     ),
                   ),
                 ],

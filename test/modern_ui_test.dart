@@ -86,7 +86,7 @@ void main() {
         await tester.pumpWidget(SariScanApp(store: store));
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
-        await tester.tap(find.byTooltip('Add to cart').first);
+        await tester.tap(find.text('Coffee original blend').first);
         await tester.pumpAndSettle();
         expect(store.cartItemCount, 2);
         await tester.tap(find.text('Products').last);

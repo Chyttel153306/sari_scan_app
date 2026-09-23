@@ -32,9 +32,9 @@ class _PosScreenState extends State<PosScreen> {
     super.dispose();
   }
 
-  List<Product> get _visibleProducts {
+  List<Product> _filterProducts(List<Product> products) {
     final query = _query.toLowerCase();
-    return widget.store.activeProducts.where((product) {
+    return products.where((product) {
       final matchesCategory =
           _category == 'All' || product.category == _category;
       final matchesSearch =
@@ -121,206 +121,221 @@ class _PosScreenState extends State<PosScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final categories = {
-      'All',
-      ...widget.store.activeProducts.map((product) => product.category),
-    }.toList();
-
     return ListenableBuilder(
       listenable: widget.store,
-      builder: (context, _) => Stack(
-        children: [
-          CustomScrollView(
-            slivers: [
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _searchController,
-                          onChanged: (value) => setState(() => _query = value),
-                          decoration: InputDecoration(
-                            hintText: 'Search product...',
-                            prefixIcon: const Icon(Icons.search),
-                            suffixIcon: _query.isEmpty
-                                ? null
-                                : IconButton(
-                                    onPressed: () {
-                                      _searchController.clear();
-                                      setState(() => _query = '');
-                                    },
-                                    icon: const Icon(Icons.clear),
-                                  ),
+      builder: (context, _) {
+        // Share one catalog snapshot across the count and lazy grid builders.
+        // Scrolling must not filter the entire catalog for each new card.
+        final products = widget.store.activeProducts;
+        final visibleProducts = _filterProducts(products);
+        final categories = {
+          'All',
+          ...products.map((product) => product.category),
+        }.toList();
+
+        return Stack(
+          children: [
+            CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _searchController,
+                            onChanged: (value) =>
+                                setState(() => _query = value),
+                            decoration: InputDecoration(
+                              hintText: 'Search product...',
+                              prefixIcon: const Icon(Icons.search),
+                              suffixIcon: _query.isEmpty
+                                  ? null
+                                  : IconButton(
+                                      onPressed: () {
+                                        _searchController.clear();
+                                        setState(() => _query = '');
+                                      },
+                                      icon: const Icon(Icons.clear),
+                                    ),
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      IconButton.filled(
-                        tooltip: 'Scan barcode',
-                        onPressed: _openBarcodeEntry,
-                        icon: const Icon(Icons.qr_code_scanner_rounded),
-                        style: IconButton.styleFrom(
-                          minimumSize: const Size(56, 56),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
+                        const SizedBox(width: 10),
+                        IconButton.filled(
+                          tooltip: 'Scan barcode',
+                          onPressed: _openBarcodeEntry,
+                          icon: const Icon(Icons.qr_code_scanner_rounded),
+                          style: IconButton.styleFrom(
+                            minimumSize: const Size(56, 56),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              SliverToBoxAdapter(
-                child: SizedBox(
-                  height: 52,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    scrollDirection: Axis.horizontal,
-                    itemCount: categories.length,
-                    separatorBuilder: (_, _) => const SizedBox(width: 8),
-                    itemBuilder: (context, index) {
-                      final category = categories[index];
-                      return ChoiceChip(
-                        label: Text(category == 'All' ? 'All Items' : category),
-                        labelStyle: TextStyle(
-                          color: _category == category
-                              ? Colors.white
-                              : AppTheme.muted,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        selected: _category == category,
-                        selectedColor: AppTheme.emerald,
-                        showCheckmark: false,
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        onSelected: (_) => setState(() => _category = category),
-                      );
-                    },
-                  ),
-                ),
-              ),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                  child: Text(
-                    '${_visibleProducts.length} products available',
-                    style: const TextStyle(fontSize: 12, color: AppTheme.muted),
-                  ),
-                ),
-              ),
-              if (_visibleProducts.isEmpty)
-                const SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(
-                    child: EmptyState(
-                      title: 'No matching products found.',
-                      message: 'Add products in inventory to start selling.',
+                      ],
                     ),
                   ),
-                )
-              else
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 110),
-                  sliver: SliverLayoutBuilder(
-                    builder: (context, constraints) => SliverGrid.builder(
-                      gridDelegate: productGridDelegate(
-                        context,
-                        availableWidth: constraints.crossAxisExtent,
-                      ),
-                      itemCount: _visibleProducts.length,
+                ),
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: 52,
+                    child: ListView.separated(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      scrollDirection: Axis.horizontal,
+                      itemCount: categories.length,
+                      separatorBuilder: (_, _) => const SizedBox(width: 8),
                       itemBuilder: (context, index) {
-                        final product = _visibleProducts[index];
-                        return CatalogProductCard(
-                          product: product,
-                          onAdd: product.stock > 0
-                              ? () => widget.store.addToCart(product)
-                              : null,
+                        final category = categories[index];
+                        return ChoiceChip(
+                          label: Text(
+                            category == 'All' ? 'All Items' : category,
+                          ),
+                          labelStyle: TextStyle(
+                            color: _category == category
+                                ? Colors.white
+                                : AppTheme.muted,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          selected: _category == category,
+                          selectedColor: AppTheme.emerald,
+                          showCheckmark: false,
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          onSelected: (_) =>
+                              setState(() => _category = category),
                         );
                       },
                     ),
                   ),
                 ),
-            ],
-          ),
-          if (widget.store.cartItemCount > 0)
-            Positioned(
-              left: 12,
-              right: 12,
-              bottom: 12,
-              child: SafeArea(
-                top: false,
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppTheme.ink,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x260F172A),
-                        blurRadius: 18,
-                        offset: Offset(0, 6),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    child: Text(
+                      '${visibleProducts.length} products available',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.muted,
                       ),
-                    ],
+                    ),
                   ),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        onPressed: _openCart,
-                        tooltip: 'View cart',
-                        icon: const Icon(
-                          Icons.shopping_bag_outlined,
-                          color: Color(0xFF6EE7B7),
-                        ),
+                ),
+                if (visibleProducts.isEmpty)
+                  const SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(
+                      child: EmptyState(
+                        title: 'No matching products found.',
+                        message: 'Add products in inventory to start selling.',
                       ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: InkWell(
-                          onTap: _openCart,
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '${widget.store.cartItemCount} Items in Cart',
-                                style: const TextStyle(
-                                  color: Color(0xFFCBD5E1),
-                                  fontSize: 10,
-                                ),
-                              ),
-                              PriceText(
-                                money(widget.store.cartTotal),
-                                style: const TextStyle(
-                                  fontFamily: 'SpaceGrotesk',
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      FilledButton.icon(
-                        onPressed: () => Navigator.push(
+                    ),
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 110),
+                    sliver: SliverLayoutBuilder(
+                      builder: (context, constraints) => SliverGrid.builder(
+                        gridDelegate: productGridDelegate(
                           context,
-                          MaterialPageRoute(
-                            builder: (_) => CheckoutScreen(store: widget.store),
+                          availableWidth: constraints.crossAxisExtent,
+                        ),
+                        itemCount: visibleProducts.length,
+                        itemBuilder: (context, index) {
+                          final product = visibleProducts[index];
+                          return CatalogProductCard(
+                            key: ValueKey(product.id),
+                            product: product,
+                            onAdd: product.stock > 0
+                                ? () => widget.store.addToCart(product)
+                                : null,
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            if (widget.store.cartItemCount > 0)
+              Positioned(
+                left: 12,
+                right: 12,
+                bottom: 12,
+                child: SafeArea(
+                  top: false,
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppTheme.ink,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x260F172A),
+                          blurRadius: 18,
+                          offset: Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        IconButton(
+                          onPressed: _openCart,
+                          tooltip: 'View cart',
+                          icon: const Icon(
+                            Icons.shopping_bag_outlined,
+                            color: Color(0xFF6EE7B7),
                           ),
                         ),
-                        iconAlignment: IconAlignment.end,
-                        icon: const Icon(Icons.arrow_forward, size: 18),
-                        label: const Text('Charge'),
-                      ),
-                    ],
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: InkWell(
+                            onTap: _openCart,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '${widget.store.cartItemCount} Items in Cart',
+                                  style: const TextStyle(
+                                    color: Color(0xFFCBD5E1),
+                                    fontSize: 10,
+                                  ),
+                                ),
+                                PriceText(
+                                  money(widget.store.cartTotal),
+                                  style: const TextStyle(
+                                    fontFamily: 'SpaceGrotesk',
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        FilledButton.icon(
+                          onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  CheckoutScreen(store: widget.store),
+                            ),
+                          ),
+                          iconAlignment: IconAlignment.end,
+                          icon: const Icon(Icons.arrow_forward, size: 18),
+                          label: const Text('Charge'),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-        ],
-      ),
+          ],
+        );
+      },
     );
   }
 }

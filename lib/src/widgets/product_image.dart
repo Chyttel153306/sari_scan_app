@@ -8,11 +8,13 @@ class ProductImage extends StatelessWidget {
     required this.imagePath,
     this.fit = BoxFit.cover,
     this.placeholderSize = 54,
+    this.cacheWidth,
   });
 
   final String? imagePath;
   final BoxFit fit;
   final double placeholderSize;
+  final int? cacheWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -21,6 +23,7 @@ class ProductImage extends StatelessWidget {
     return Image.file(
       File(path),
       fit: fit,
+      cacheWidth: cacheWidth,
       errorBuilder: (_, _, _) => _placeholder(context),
     );
   }
