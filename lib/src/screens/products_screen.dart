@@ -104,7 +104,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: widget.store,
+      listenable: widget.store.dataChanges,
       builder: (context, _) => Stack(
         children: [
           ListView(

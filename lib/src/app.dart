@@ -38,7 +38,7 @@ class _SariScanAppState extends State<SariScanApp> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: store,
+      listenable: store.dataChanges,
       builder: (context, _) => MaterialApp(
         title: 'SariScan',
         debugShowCheckedModeBanner: false,

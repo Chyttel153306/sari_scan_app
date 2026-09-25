@@ -57,6 +57,10 @@ class CatalogProductCard extends StatelessWidget {
                                 (constraints.maxWidth *
                                         MediaQuery.devicePixelRatioOf(context))
                                     .ceil(),
+                            cacheHeight:
+                                (constraints.maxHeight *
+                                        MediaQuery.devicePixelRatioOf(context))
+                                    .ceil(),
                           ),
                         ),
                       ),

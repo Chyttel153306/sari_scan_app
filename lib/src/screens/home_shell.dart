@@ -20,6 +20,7 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
+  final Set<int> _visitedTabs = {0};
 
   void _openMore() {
     showModalBottomSheet<void>(
@@ -164,7 +165,16 @@ class _HomeShellState extends State<HomeShell> {
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 760),
-          child: IndexedStack(index: _index, children: screens),
+          child: IndexedStack(
+            index: _index,
+            children: [
+              for (var index = 0; index < screens.length; index++)
+                if (_visitedTabs.contains(index))
+                  TickerMode(enabled: index == _index, child: screens[index])
+                else
+                  const SizedBox.shrink(),
+            ],
+          ),
         ),
       ),
       bottomNavigationBar: DecoratedBox(
@@ -184,7 +194,10 @@ class _HomeShellState extends State<HomeShell> {
             if (value == 4) {
               _openMore();
             } else {
-              setState(() => _index = value);
+              setState(() {
+                _index = value;
+                _visitedTabs.add(value);
+              });
             }
           },
           destinations: const [

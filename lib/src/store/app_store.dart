@@ -109,8 +109,21 @@ class AppStore extends ChangeNotifier {
   bool get isImageSyncAvailable => imageSync != null;
   Future<void> get persistenceSettled => _persistenceQueue;
 
+  final ChangeNotifier _dataChanges = ChangeNotifier();
+
+  /// Store updates excluding cart quantity changes. Catalogs, reports and the
+  /// app shell do not need to rebuild when a cashier adds an item to the cart.
+  Listenable get dataChanges => _dataChanges;
+
+  @override
+  void notifyListeners() {
+    _dataChanges.notifyListeners();
+    super.notifyListeners();
+  }
+
   @override
   void dispose() {
+    _dataChanges.dispose();
     imageSync?.dispose();
     super.dispose();
   }
@@ -234,7 +247,7 @@ class AppStore extends ChangeNotifier {
     final current = _cart[product.id] ?? 0;
     if (current >= product.stock) return;
     _cart[product.id] = current + 1;
-    notifyListeners();
+    super.notifyListeners();
   }
 
   void removeOneFromCart(Product product) {
@@ -244,12 +257,12 @@ class AppStore extends ChangeNotifier {
     } else {
       _cart[product.id] = current - 1;
     }
-    notifyListeners();
+    super.notifyListeners();
   }
 
   void removeFromCart(Product product) {
     _cart.remove(product.id);
-    notifyListeners();
+    super.notifyListeners();
   }
 
   Product? findByBarcode(String barcode) {

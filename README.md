@@ -41,6 +41,29 @@ flutter pub get
 flutter run
 ```
 
+## Smaller Android builds and smooth scrolling
+
+Use a release build on the phone when judging app size and scrolling. Debug
+builds include development tooling and are not representative of release speed.
+Build separate APKs so each phone downloads only its CPU architecture:
+
+```sh
+flutter build apk --release --split-per-abi --split-debug-info=build/symbols
+```
+
+The APKs are in `build/app/outputs/flutter-apk/`. Most current Android phones
+use `app-arm64-v8a-release.apk`; older 32-bit ARM phones use
+`app-armeabi-v7a-release.apk`. Keep `build/symbols` with each release for crash
+symbolication. For Google Play, use `flutter build appbundle --release` to let
+the store deliver the appropriate device-specific files. Release signing still
+needs a production keystore before publishing.
+
+For frame timing on a connected phone, run `flutter run --profile` and record a
+POS scroll in DevTools Performance with a realistic catalog and product photos.
+Catalog photos decode within their displayed pixel dimensions. Cart changes
+update the cart controls without rebuilding catalogs, reports, or the app theme.
+Tabs load on first visit and retain their state when switching back.
+
 No server or internet connection is required while using the app. On first use,
 enter the store owner's name and approve the phone security prompt. SariScan
 does not create demo products, customers, or sales. Records appear only after

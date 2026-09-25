@@ -34,7 +34,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: widget.store,
+      listenable: widget.store.dataChanges,
       builder: (context, _) {
         final now = DateTime.now();
         final sales = widget.store.salesFor(_period, now: now);

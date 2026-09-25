@@ -1,5 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Firebase Authentication and Cloud Firestore need network access in
+    <!-- Supabase record and photo sync need network access in
          release builds. The debug manifest alone is not included in a release APK. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />

@@ -54,7 +54,7 @@ class _UtangScreenState extends State<UtangScreen> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: widget.store,
+      listenable: widget.store.dataChanges,
       builder: (context, _) {
         final now = DateTime.now();
         final weekStart = reportStart(ReportPeriod.week, now);

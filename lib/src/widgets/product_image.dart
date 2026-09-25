@@ -9,21 +9,30 @@ class ProductImage extends StatelessWidget {
     this.fit = BoxFit.cover,
     this.placeholderSize = 54,
     this.cacheWidth,
+    this.cacheHeight,
   });
 
   final String? imagePath;
   final BoxFit fit;
   final double placeholderSize;
   final int? cacheWidth;
+  final int? cacheHeight;
 
   @override
   Widget build(BuildContext context) {
     final path = imagePath;
     if (path == null || path.isEmpty) return _placeholder(context);
-    return Image.file(
-      File(path),
+    final provider = FileImage(File(path));
+    return Image(
+      image: cacheWidth == null && cacheHeight == null
+          ? provider
+          : ResizeImage(
+              provider,
+              width: cacheWidth,
+              height: cacheHeight,
+              policy: ResizeImagePolicy.fit,
+            ),
       fit: fit,
-      cacheWidth: cacheWidth,
       errorBuilder: (_, _, _) => _placeholder(context),
     );
   }

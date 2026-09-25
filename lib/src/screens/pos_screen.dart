@@ -122,7 +122,7 @@ class _PosScreenState extends State<PosScreen> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: widget.store,
+      listenable: widget.store.dataChanges,
       builder: (context, _) {
         // Share one catalog snapshot across the count and lazy grid builders.
         // Scrolling must not filter the entire catalog for each new card.
@@ -257,82 +257,87 @@ class _PosScreenState extends State<PosScreen> {
                   ),
               ],
             ),
-            if (widget.store.cartItemCount > 0)
-              Positioned(
-                left: 12,
-                right: 12,
-                bottom: 12,
-                child: SafeArea(
-                  top: false,
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      gradient: AppTheme.of(context).heroGradient,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Color(0x260F172A),
-                          blurRadius: 18,
-                          offset: Offset(0, 6),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        IconButton(
-                          onPressed: _openCart,
-                          tooltip: 'View cart',
-                          icon: const Icon(
-                            Icons.shopping_bag_outlined,
-                            color: Colors.white70,
+            ListenableBuilder(
+              listenable: widget.store,
+              builder: (context, _) => widget.store.cartItemCount == 0
+                  ? const SizedBox.shrink()
+                  : Positioned(
+                      left: 12,
+                      right: 12,
+                      bottom: 12,
+                      child: SafeArea(
+                        top: false,
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            gradient: AppTheme.of(context).heroGradient,
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Color(0x260F172A),
+                                blurRadius: 18,
+                                offset: Offset(0, 6),
+                              ),
+                            ],
                           ),
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: InkWell(
-                            onTap: _openCart,
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '${widget.store.cartItemCount} Items in Cart',
-                                  style: const TextStyle(
-                                    color: Color(0xFFCBD5E1),
-                                    fontSize: 10,
+                          child: Row(
+                            children: [
+                              IconButton(
+                                onPressed: _openCart,
+                                tooltip: 'View cart',
+                                icon: const Icon(
+                                  Icons.shopping_bag_outlined,
+                                  color: Colors.white70,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: InkWell(
+                                  onTap: _openCart,
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '${widget.store.cartItemCount} Items in Cart',
+                                        style: const TextStyle(
+                                          color: Color(0xFFCBD5E1),
+                                          fontSize: 10,
+                                        ),
+                                      ),
+                                      PriceText(
+                                        money(widget.store.cartTotal),
+                                        style: const TextStyle(
+                                          fontFamily: 'SpaceGrotesk',
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.w700,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                                PriceText(
-                                  money(widget.store.cartTotal),
-                                  style: const TextStyle(
-                                    fontFamily: 'SpaceGrotesk',
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.white,
+                              ),
+                              const SizedBox(width: 10),
+                              FilledButton.icon(
+                                onPressed: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        CheckoutScreen(store: widget.store),
                                   ),
                                 ),
-                              ],
-                            ),
+                                iconAlignment: IconAlignment.end,
+                                icon: const Icon(Icons.arrow_forward, size: 18),
+                                label: const Text('Charge'),
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        FilledButton.icon(
-                          onPressed: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  CheckoutScreen(store: widget.store),
-                            ),
-                          ),
-                          iconAlignment: IconAlignment.end,
-                          icon: const Icon(Icons.arrow_forward, size: 18),
-                          label: const Text('Charge'),
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
-                ),
-              ),
+            ),
           ],
         );
       },
@@ -348,6 +353,7 @@ class _CartSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lines = store.cartLines;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
       child: Column(
@@ -363,10 +369,10 @@ class _CartSheet extends StatelessWidget {
           const SizedBox(height: 12),
           Expanded(
             child: ListView.separated(
-              itemCount: store.cartLines.length,
+              itemCount: lines.length,
               separatorBuilder: (_, _) => const Divider(),
               itemBuilder: (context, index) {
-                final line = store.cartLines[index];
+                final line = lines[index];
                 return ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: Text(line.product.name),
@@ -419,7 +425,7 @@ class _CartSheet extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           FilledButton.icon(
-            onPressed: store.cartLines.isEmpty ? null : onCheckout,
+            onPressed: lines.isEmpty ? null : onCheckout,
             icon: const Icon(Icons.payments_outlined),
             label: const Text('Proceed to checkout'),
           ),
