@@ -73,7 +73,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final change = _cash - total;
     final canComplete =
         widget.store.cartItemCount > 0 &&
-        (_paymentType == PaymentType.cash ? _cash >= total : _customer != null);
+        (_paymentType == PaymentType.cash
+            ? _cash.isFinite && _cash >= total
+            : _customer != null);
     return Scaffold(
       appBar: AppBar(title: const Text('Checkout')),
       bottomNavigationBar: Padding(

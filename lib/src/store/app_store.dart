@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import '../models/models.dart';
+import '../utils/barcodes.dart';
 import '../theme/theme_choice.dart';
 import '../models/sales_trend.dart';
 import '../services/local_storage_service.dart';
@@ -265,10 +266,21 @@ class AppStore extends ChangeNotifier {
     super.notifyListeners();
   }
 
-  Product? findByBarcode(String barcode) {
-    final normalized = barcode.trim();
+  Product? findByBarcode(String barcode, {Product? excluding}) {
+    final normalized = normalizeBarcode(barcode);
+    if (normalized.isEmpty) return null;
+    // Prefer an exact match for older catalogs containing equivalent codes.
     for (final product in activeProducts) {
-      if (product.barcode == normalized) return product;
+      if (product != excluding &&
+          normalizeBarcode(product.barcode) == normalized) {
+        return product;
+      }
+    }
+    final key = barcodeKey(normalized);
+    for (final product in activeProducts) {
+      if (product != excluding && barcodeKey(product.barcode) == key) {
+        return product;
+      }
     }
     return null;
   }
@@ -285,6 +297,25 @@ class AppStore extends ChangeNotifier {
     required String barcode,
     required int lowStockThreshold,
   }) {
+    if (existing != null && !products.contains(existing)) {
+      throw ArgumentError('Product is no longer in inventory.');
+    }
+    if (name.trim().isEmpty || category.trim().isEmpty) {
+      throw ArgumentError('Product name and category are required.');
+    }
+    if (!price.isFinite ||
+        price < 0 ||
+        (costPrice != null && (!costPrice.isFinite || costPrice < 0))) {
+      throw ArgumentError('Enter a valid non-negative price.');
+    }
+    if (lowStockThreshold < 0 ||
+        (existing == null && (stock == null || stock < 0))) {
+      throw ArgumentError('Stock and minimum stock must be zero or more.');
+    }
+    if (existing?.isArchived != true &&
+        findByBarcode(barcode, excluding: existing) != null) {
+      throw ArgumentError('Another active product already uses this barcode.');
+    }
     late final Product savedProduct;
     if (existing == null) {
       if (stock == null) {
@@ -299,7 +330,7 @@ class AppStore extends ChangeNotifier {
         costPrice: costPrice,
         imagePath: imagePath,
         imageUrl: imageUrl,
-        barcode: barcode.trim(),
+        barcode: normalizeBarcode(barcode),
         lowStockThreshold: lowStockThreshold,
       );
       products.add(savedProduct);
@@ -325,7 +356,7 @@ class AppStore extends ChangeNotifier {
         ..costPrice = costPrice
         ..imagePath = imagePath
         ..imageUrl = imageUrl
-        ..barcode = barcode.trim()
+        ..barcode = normalizeBarcode(barcode)
         ..lowStockThreshold = lowStockThreshold;
       savedProduct = existing;
     }
@@ -383,11 +414,16 @@ class AppStore extends ChangeNotifier {
     return addition;
   }
 
-  void toggleArchive(Product product) {
+  String? toggleArchive(Product product) {
+    if (product.isArchived &&
+        findByBarcode(product.barcode, excluding: product) != null) {
+      return 'Another active product already uses this barcode. Edit it before restoring.';
+    }
     product.isArchived = !product.isArchived;
     _cart.remove(product.id);
     notifyListeners();
     _queueSave();
+    return null;
   }
 
   void deleteProduct(Product product) {
@@ -521,7 +557,9 @@ class AppStore extends ChangeNotifier {
   }
 
   String? recordPayment(Customer customer, double amount) {
-    if (amount <= 0) return 'Enter a payment greater than zero.';
+    if (!amount.isFinite || amount <= 0) {
+      return 'Enter a valid payment greater than zero.';
+    }
     if (amount > customer.balance) {
       return 'Payment cannot be greater than the outstanding balance.';
     }
@@ -546,6 +584,10 @@ class AppStore extends ChangeNotifier {
     Customer? customer,
   }) {
     if (_cart.isEmpty) throw StateError('The cart is empty.');
+    if (paymentType == PaymentType.cash &&
+        (!amountReceived.isFinite || amountReceived < 0)) {
+      throw StateError('Enter a valid cash amount.');
+    }
     if (paymentType == PaymentType.cash && amountReceived < cartTotal) {
       throw StateError('The cash amount is insufficient.');
     }
@@ -581,7 +623,7 @@ class AppStore extends ChangeNotifier {
     }
     sales.insert(0, sale);
 
-    if (customer != null) {
+    if (paymentType == PaymentType.utang && customer != null) {
       customer.ledger.insert(
         0,
         LedgerEntry(

@@ -4,6 +4,7 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:image_picker/image_picker.dart';
 
 import '../models/models.dart';
+import '../utils/barcodes.dart';
 import '../services/product_photo_suggestion.dart';
 import '../store/app_store.dart';
 import '../widgets/product_image.dart';
@@ -35,14 +36,14 @@ class _ProductsScreenState extends State<ProductsScreen> {
   }
 
   List<Product> get _products {
-    final query = _query.toLowerCase();
+    final query = _query.trim().toLowerCase();
     return widget.store.products.where((product) {
       if (!_showArchived && product.isArchived) return false;
       if (_category != 'All' && product.category != _category) return false;
       return query.isEmpty ||
           product.name.toLowerCase().contains(query) ||
           product.category.toLowerCase().contains(query) ||
-          product.barcode.contains(query);
+          matchesBarcodeSearch(product.barcode, query);
     }).toList()..sort((a, b) => a.name.compareTo(b.name));
   }
 
@@ -202,7 +203,14 @@ class _ProductsScreenState extends State<ProductsScreen> {
                         product: product,
                         onEdit: () => _editProduct(product),
                         onAddStock: () => _addStock(product),
-                        onArchive: () => widget.store.toggleArchive(product),
+                        onArchive: () {
+                          final error = widget.store.toggleArchive(product);
+                          if (error != null) {
+                            ScaffoldMessenger.of(
+                              context,
+                            ).showSnackBar(SnackBar(content: Text(error)));
+                          }
+                        },
                         onDelete: () => _deleteProduct(product),
                       );
                     },
@@ -560,8 +568,9 @@ class _ProductDialogState extends State<ProductDialog> {
   void _handleCostChanged() {
     if (_priceManuallyEdited) return;
     final cost = double.tryParse(_cost.text);
-    if (cost == null || cost < 0) return;
+    if (cost == null || !cost.isFinite || cost < 0) return;
     final computed = widget.store.suggestedSellingPrice(cost);
+    if (!computed.isFinite) return;
     _syncingPrice = true;
     _price.text = computed.toStringAsFixed(2);
     _syncingPrice = false;
@@ -572,7 +581,16 @@ class _ProductDialogState extends State<ProductDialog> {
       : value.toStringAsFixed(1);
 
   Future<void> _save() async {
+    if (_saving) return;
     if (!(_formKey.currentState?.validate() ?? false)) return;
+    // Capture validated input before awaiting photo storage/upload.
+    final name = _name.text;
+    final category = _category.text;
+    final cost = double.parse(_cost.text);
+    final price = double.parse(_price.text);
+    final stock = widget.product == null ? int.parse(_stock.text) : null;
+    final barcode = normalizeBarcode(_barcode.text);
+    final threshold = int.parse(_threshold.text);
     setState(() => _saving = true);
     // Imports the photo locally and, when an image sync service is
     // configured, uploads it to ImgBB so it can follow this product to
@@ -593,19 +611,26 @@ class _ProductDialogState extends State<ProductDialog> {
       return;
     }
     if (!mounted) return;
-    final savedProduct = widget.store.saveProduct(
-      existing: widget.product,
-      name: _name.text,
-      category: _category.text,
-      costPrice: double.parse(_cost.text),
-      price: double.parse(_price.text),
-      stock: widget.product == null ? int.parse(_stock.text) : null,
-      imagePath: imported.path,
-      imageUrl: imported.url,
-      barcode: _barcode.text,
-      lowStockThreshold: int.parse(_threshold.text),
-    );
-    Navigator.pop(context, savedProduct);
+    try {
+      final savedProduct = widget.store.saveProduct(
+        existing: widget.product,
+        name: name,
+        category: category,
+        costPrice: cost,
+        price: price,
+        stock: stock,
+        imagePath: imported.path,
+        imageUrl: imported.url,
+        barcode: barcode,
+        lowStockThreshold: threshold,
+      );
+      Navigator.pop(context, savedProduct);
+    } on ArgumentError catch (error) {
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('${error.message}')));
+    }
   }
 
   Future<void> _pickPhoto() async {
@@ -719,8 +744,9 @@ class _ProductDialogState extends State<ProductDialog> {
         builder: (_) => const BarcodeScannerScreen(),
       ),
     );
-    if (barcode != null && barcode.isNotEmpty) {
-      _barcode.text = barcode;
+    if (!mounted) return;
+    if (barcode != null && normalizeBarcode(barcode).isNotEmpty) {
+      _barcode.text = normalizeBarcode(barcode);
     }
   }
 
@@ -731,276 +757,289 @@ class _ProductDialogState extends State<ProductDialog> {
     return Scaffold(
       backgroundColor: colors.surface,
       appBar: AppBar(title: Text(isNew ? 'Add New Product' : 'Edit Product')),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
-          children: [
-            Text(
-              isNew
-                  ? 'Enter details for the new inventory item.'
-                  : 'Update this inventory item.',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: colors.onSurfaceVariant),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'PRODUCT IMAGE',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 8),
-            InkWell(
-              borderRadius: BorderRadius.circular(14),
-              onTap: _pickPhoto,
-              child: Container(
-                height: 160,
-                clipBehavior: Clip.antiAlias,
-                decoration: BoxDecoration(
-                  border: Border.all(color: colors.outlineVariant),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: _imagePath == null
-                    ? Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          CircleAvatar(
-                            backgroundColor: AppTheme.of(context).mint,
-                            child: Icon(
-                              Icons.add_a_photo_outlined,
-                              color: colors.primary,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          const Text('Upload Product Photo'),
-                        ],
-                      )
-                    : Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          ProductImage(imagePath: _imagePath),
-                          Positioned(
-                            right: 8,
-                            top: 8,
-                            child: IconButton.filledTonal(
-                              tooltip: 'Remove photo',
-                              onPressed: () => _setPhoto(null),
-                              icon: const Icon(Icons.close_rounded),
-                            ),
-                          ),
-                        ],
-                      ),
-              ),
-            ),
-            if (_recognizingPhoto)
-              const Padding(
-                padding: EdgeInsets.only(top: 8),
-                child: Row(
-                  children: [
-                    SizedBox.square(
-                      dimension: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    SizedBox(width: 8),
-                    Text('Reading product label…'),
-                  ],
-                ),
-              ),
-            if (_photoMessage != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  _photoMessage!,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
-            const SizedBox(height: 24),
-            TextFormField(
-              controller: _name,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(
-                labelText: 'Product Name',
-                hintText: 'e.g., Bear Brand Fortified 320g',
-              ),
-              validator: _required,
-            ),
-            const SizedBox(height: 14),
-            // Category field: looks like a normal text field with a
-            // dropdown-arrow accessory on the right. Tapping the icon (or
-            // the field itself) opens a floating list of existing
-            // categories anchored just below it — tap one to pick it, or
-            // keep typing to create a brand-new category if none fits.
-            LayoutBuilder(
-              builder: (context, constraints) {
-                _categoryFieldWidth = constraints.maxWidth;
-                return CompositedTransformTarget(
-                  link: _categoryLayerLink,
-                  child: TextFormField(
-                    controller: _category,
-                    focusNode: _categoryFocusNode,
-                    textCapitalization: TextCapitalization.words,
-                    decoration: InputDecoration(
-                      labelText: 'Category',
-                      hintText: 'e.g., Drinks, Snacks, Canned Goods',
-                      suffixIcon: IconButton(
-                        tooltip: 'Choose existing category',
-                        onPressed: _toggleCategoryDropdown,
-                        icon: AnimatedRotation(
-                          turns: _categoryDropdownOpen ? 0.5 : 0,
-                          duration: const Duration(milliseconds: 150),
-                          child: const Icon(Icons.expand_more_rounded),
-                        ),
-                      ),
-                    ),
-                    validator: _required,
-                    onTap: () {
-                      if (_categoryOverlayEntry == null) {
-                        _openCategoryDropdown();
-                      }
-                    },
-                    onChanged: (_) {
-                      if (_categoryOverlayEntry != null) {
-                        _categoryOverlayEntry!.markNeedsBuild();
-                      } else {
-                        _openCategoryDropdown();
-                      }
-                    },
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 14),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      body: AbsorbPointer(
+        absorbing: _saving,
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
-                  child: TextFormField(
-                    controller: _cost,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: const InputDecoration(
-                      labelText: 'Cost Price',
-                      prefixText: '₱ ',
-                    ),
-                    validator: _money,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextFormField(
-                    controller: _price,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: InputDecoration(
-                      labelText: 'Selling Price',
-                      prefixText: '₱ ',
-                      helperText: _priceManuallyEdited
-                          ? 'Manually set'
-                          : 'Auto: cost + '
-                                '${_formatPercent(widget.store.markupPercent)}%',
-                      helperMaxLines: 2,
-                      suffixIcon: IconButton(
-                        tooltip: 'Recalculate from cost + markup',
-                        onPressed: () {
-                          setState(() => _priceManuallyEdited = false);
-                          _handleCostChanged();
-                        },
-                        icon: const Icon(Icons.refresh_rounded, size: 20),
-                      ),
-                    ),
-                    onChanged: (_) {
-                      if (_syncingPrice) return;
-                      if (!_priceManuallyEdited) {
-                        setState(() => _priceManuallyEdited = true);
-                      }
-                    },
-                    validator: _money,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (isNew)
-                  Expanded(
-                    child: TextFormField(
-                      controller: _stock,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      decoration: const InputDecoration(
-                        labelText: 'Initial Stock',
-                      ),
-                      validator: _wholeNumber,
-                    ),
-                  )
-                else
-                  Expanded(
-                    child: InputDecorator(
-                      decoration: const InputDecoration(
-                        labelText: 'Current Stock',
-                      ),
-                      child: Text(
-                        '${widget.product!.stock}',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                    ),
-                  ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextFormField(
-                    controller: _threshold,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    decoration: const InputDecoration(
-                      labelText: 'Min Stock Alert',
-                    ),
-                    validator: _wholeNumber,
-                  ),
-                ),
-              ],
-            ),
-            if (!isNew)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  'Stock can only be increased from Add stock so each delivery is recorded.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                Text(
+                  isNew
+                      ? 'Enter details for the new inventory item.'
+                      : 'Update this inventory item.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: colors.onSurfaceVariant,
                   ),
                 ),
-              ),
-            const SizedBox(height: 14),
-            TextFormField(
-              controller: _barcode,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: 'Barcode (optional)',
-                prefixIcon: const Icon(Icons.qr_code_rounded),
-                suffixIcon: IconButton(
-                  tooltip: 'Scan barcode with camera',
-                  onPressed: _scanBarcode,
-                  icon: const Icon(Icons.qr_code_scanner_rounded),
+                const SizedBox(height: 24),
+                const Text(
+                  'PRODUCT IMAGE',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
                 ),
-              ),
-              validator: (value) {
-                final barcode = value?.trim() ?? '';
-                if (barcode.isEmpty) return null;
-                final duplicate = widget.store.products.any(
-                  (product) =>
-                      !identical(product, widget.product) &&
-                      !product.isArchived &&
-                      product.barcode == barcode,
-                );
-                return duplicate
-                    ? 'Another active product already uses this barcode.'
-                    : null;
-              },
+                const SizedBox(height: 8),
+                InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: _pickPhoto,
+                  child: Container(
+                    height: 160,
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: colors.outlineVariant),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: _imagePath == null
+                        ? Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              CircleAvatar(
+                                backgroundColor: AppTheme.of(context).mint,
+                                child: Icon(
+                                  Icons.add_a_photo_outlined,
+                                  color: colors.primary,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              const Text('Upload Product Photo'),
+                            ],
+                          )
+                        : Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              ProductImage(imagePath: _imagePath),
+                              Positioned(
+                                right: 8,
+                                top: 8,
+                                child: IconButton.filledTonal(
+                                  tooltip: 'Remove photo',
+                                  onPressed: () => _setPhoto(null),
+                                  icon: const Icon(Icons.close_rounded),
+                                ),
+                              ),
+                            ],
+                          ),
+                  ),
+                ),
+                if (_recognizingPhoto)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 8),
+                    child: Row(
+                      children: [
+                        SizedBox.square(
+                          dimension: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        SizedBox(width: 8),
+                        Text('Reading product label…'),
+                      ],
+                    ),
+                  ),
+                if (_photoMessage != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      _photoMessage!,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                const SizedBox(height: 24),
+                TextFormField(
+                  controller: _name,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(
+                    labelText: 'Product Name',
+                    hintText: 'e.g., Bear Brand Fortified 320g',
+                  ),
+                  validator: _required,
+                ),
+                const SizedBox(height: 14),
+                // Category field: looks like a normal text field with a
+                // dropdown-arrow accessory on the right. Tapping the icon (or
+                // the field itself) opens a floating list of existing
+                // categories anchored just below it — tap one to pick it, or
+                // keep typing to create a brand-new category if none fits.
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    _categoryFieldWidth = constraints.maxWidth;
+                    return CompositedTransformTarget(
+                      link: _categoryLayerLink,
+                      child: TextFormField(
+                        controller: _category,
+                        focusNode: _categoryFocusNode,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: InputDecoration(
+                          labelText: 'Category',
+                          hintText: 'e.g., Drinks, Snacks, Canned Goods',
+                          suffixIcon: IconButton(
+                            tooltip: 'Choose existing category',
+                            onPressed: _toggleCategoryDropdown,
+                            icon: AnimatedRotation(
+                              turns: _categoryDropdownOpen ? 0.5 : 0,
+                              duration: const Duration(milliseconds: 150),
+                              child: const Icon(Icons.expand_more_rounded),
+                            ),
+                          ),
+                        ),
+                        validator: _required,
+                        onTap: () {
+                          if (_categoryOverlayEntry == null) {
+                            _openCategoryDropdown();
+                          }
+                        },
+                        onChanged: (_) {
+                          if (_categoryOverlayEntry != null) {
+                            _categoryOverlayEntry!.markNeedsBuild();
+                          } else {
+                            _openCategoryDropdown();
+                          }
+                        },
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: _cost,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: const InputDecoration(
+                          labelText: 'Cost Price',
+                          prefixText: '₱ ',
+                        ),
+                        validator: _money,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextFormField(
+                        controller: _price,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: InputDecoration(
+                          labelText: 'Selling Price',
+                          prefixText: '₱ ',
+                          helperText: _priceManuallyEdited
+                              ? 'Manually set'
+                              : 'Auto: cost + '
+                                    '${_formatPercent(widget.store.markupPercent)}%',
+                          helperMaxLines: 2,
+                          suffixIcon: IconButton(
+                            tooltip: 'Recalculate from cost + markup',
+                            onPressed: () {
+                              setState(() => _priceManuallyEdited = false);
+                              _handleCostChanged();
+                            },
+                            icon: const Icon(Icons.refresh_rounded, size: 20),
+                          ),
+                        ),
+                        onChanged: (_) {
+                          if (_syncingPrice) return;
+                          if (!_priceManuallyEdited) {
+                            setState(() => _priceManuallyEdited = true);
+                          }
+                        },
+                        validator: _money,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (isNew)
+                      Expanded(
+                        child: TextFormField(
+                          controller: _stock,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          decoration: const InputDecoration(
+                            labelText: 'Initial Stock',
+                          ),
+                          validator: _wholeNumber,
+                        ),
+                      )
+                    else
+                      Expanded(
+                        child: InputDecorator(
+                          decoration: const InputDecoration(
+                            labelText: 'Current Stock',
+                          ),
+                          child: Text(
+                            '${widget.product!.stock}',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                        ),
+                      ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextFormField(
+                        controller: _threshold,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                        decoration: const InputDecoration(
+                          labelText: 'Min Stock Alert',
+                        ),
+                        validator: _wholeNumber,
+                      ),
+                    ),
+                  ],
+                ),
+                if (!isNew)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      'Stock can only be increased from Add stock so each delivery is recorded.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: _barcode,
+                  keyboardType: TextInputType.text,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  decoration: InputDecoration(
+                    labelText: 'Barcode (optional)',
+                    prefixIcon: const Icon(Icons.qr_code_rounded),
+                    suffixIcon: IconButton(
+                      tooltip: 'Scan barcode with camera',
+                      onPressed: _scanBarcode,
+                      icon: const Icon(Icons.qr_code_scanner_rounded),
+                    ),
+                  ),
+                  validator: (value) {
+                    final barcode = value?.trim() ?? '';
+                    if (barcode.isEmpty) return null;
+                    final duplicate =
+                        widget.product?.isArchived != true &&
+                        widget.store.findByBarcode(
+                              barcode,
+                              excluding: widget.product,
+                            ) !=
+                            null;
+                    return duplicate
+                        ? 'Another active product already uses this barcode.'
+                        : null;
+                  },
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
       bottomNavigationBar: SafeArea(
@@ -1045,7 +1084,9 @@ class _ProductDialogState extends State<ProductDialog> {
 
   String? _money(String? value) {
     final number = double.tryParse(value ?? '');
-    return number == null || number < 0 ? 'Enter a valid amount.' : null;
+    return number == null || !number.isFinite || number < 0
+        ? 'Enter a valid amount.'
+        : null;
   }
 
   String? _wholeNumber(String? value) {

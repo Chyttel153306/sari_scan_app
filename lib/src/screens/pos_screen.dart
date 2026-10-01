@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/models.dart';
+import '../utils/barcodes.dart';
 import '../store/app_store.dart';
 import '../utils/formatters.dart';
 import '../widgets/catalog_product_card.dart';
@@ -33,14 +34,14 @@ class _PosScreenState extends State<PosScreen> {
   }
 
   List<Product> _filterProducts(List<Product> products) {
-    final query = _query.toLowerCase();
+    final query = _query.trim().toLowerCase();
     return products.where((product) {
       final matchesCategory =
           _category == 'All' || product.category == _category;
       final matchesSearch =
           query.isEmpty ||
           product.name.toLowerCase().contains(query) ||
-          product.barcode.contains(query);
+          matchesBarcodeSearch(product.barcode, query);
       return matchesCategory && matchesSearch;
     }).toList();
   }
@@ -84,13 +85,27 @@ class _PosScreenState extends State<PosScreen> {
         ),
       );
       if (!mounted || savedProduct == null) return;
-      widget.store.addToCart(savedProduct);
+      _addScannedProduct(savedProduct);
       return;
     }
+    _addScannedProduct(product);
+  }
+
+  void _addScannedProduct(Product product) {
+    final previousCount = widget.store.cartItemCount;
     widget.store.addToCart(product);
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('${product.name} added to cart.')));
+    final added = widget.store.cartItemCount > previousCount;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          added
+              ? '${product.name} added to cart.'
+              : product.stock <= 0
+              ? '${product.name} is out of stock.'
+              : 'All available stock for ${product.name} is already in the cart.',
+        ),
+      ),
+    );
   }
 
   Future<void> _openCart() async {

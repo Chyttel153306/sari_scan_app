@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+
+import '../utils/barcodes.dart';
 
 class BarcodeScannerScreen extends StatefulWidget {
   const BarcodeScannerScreen({super.key});
@@ -12,14 +16,23 @@ class BarcodeScannerScreen extends StatefulWidget {
 class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
   final _manualController = TextEditingController();
   final _scannerController = MobileScannerController(
+    autoStart: false,
     detectionSpeed: DetectionSpeed.noDuplicates,
     autoZoom: true,
   );
   bool _manualEntry = false;
   bool _returningResult = false;
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _scannerController.start();
+    });
+  }
+
   void _onDetect(BarcodeCapture capture) {
-    if (_returningResult) return;
+    if (!mounted || _manualEntry || _returningResult) return;
     for (final barcode in capture.barcodes) {
       final value = barcode.rawValue?.trim();
       if (value == null || value.isEmpty) continue;
@@ -29,11 +42,18 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
   }
 
   Future<void> _returnResult(String value) async {
-    final normalized = value.trim();
-    if (normalized.isEmpty || _returningResult) return;
+    final normalized = normalizeBarcode(value);
+    if (!mounted || normalized.isEmpty || _returningResult) return;
     _returningResult = true;
-    await HapticFeedback.mediumImpact();
-    await _scannerController.stop();
+    // Feedback must not delay delivery of the barcode.
+    unawaited(HapticFeedback.mediumImpact().onError<PlatformException>((_, _) {}));
+    try {
+      await _scannerController.stop();
+    } on MobileScannerException {
+      // Manual entry must also work when camera startup failed.
+    } on PlatformException {
+      // A camera shutdown failure must not discard a valid barcode.
+    }
     if (mounted) Navigator.pop(context, normalized);
   }
 
@@ -63,63 +83,76 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Positioned.fill(
-                  child: MobileScanner(
-                    controller: _scannerController,
-                    tapToFocus: true,
-                    onDetect: _onDetect,
-                    errorBuilder: (context, error) => ColoredBox(
-                      color: const Color(0xFF202020),
-                      child: Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Text(
-                            error.errorCode ==
-                                    MobileScannerErrorCode.permissionDenied
-                                ? 'Camera permission was denied. Enable it in your phone settings, or enter the barcode manually.'
-                                : 'The camera could not start. You can still enter the barcode manually.',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(color: Colors.white),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final scanWindow = Rect.fromCenter(
+                  center: Offset(
+                    constraints.maxWidth / 2,
+                    constraints.maxHeight / 2,
+                  ),
+                  width: (constraints.maxWidth - 32).clamp(0, 290).toDouble(),
+                  height: (constraints.maxHeight - 32).clamp(0, 210).toDouble(),
+                );
+                return Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Positioned.fill(
+                      child: MobileScanner(
+                        controller: _scannerController,
+                        scanWindow: scanWindow,
+                        tapToFocus: true,
+                        onDetect: _onDetect,
+                        errorBuilder: (context, error) => ColoredBox(
+                          color: const Color(0xFF202020),
+                          child: Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Text(
+                                error.errorCode ==
+                                        MobileScannerErrorCode.permissionDenied
+                                    ? 'Camera permission was denied. Enable it in your phone settings, or enter the barcode manually.'
+                                    : 'The camera could not start. You can still enter the barcode manually.',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(color: Colors.white),
+                              ),
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ),
-                IgnorePointer(
-                  child: Container(
-                    width: 290,
-                    height: 210,
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color: const Color(0xFF58C764),
-                        width: 4,
+                    IgnorePointer(
+                      child: Container(
+                        width: scanWindow.width,
+                        height: scanWindow.height,
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: const Color(0xFF58C764),
+                            width: 4,
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
-                      borderRadius: BorderRadius.circular(12),
                     ),
-                  ),
-                ),
-                Positioned(
-                  bottom: 38,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 18,
-                      vertical: 9,
+                    Positioned(
+                      bottom: 38,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 9,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.68),
+                          borderRadius: BorderRadius.circular(99),
+                        ),
+                        child: const Text(
+                          'Point the camera at a product barcode',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      ),
                     ),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.68),
-                      borderRadius: BorderRadius.circular(99),
-                    ),
-                    child: const Text(
-                      'Point the camera at a product barcode',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ),
-                ),
-              ],
+                  ],
+                );
+              },
             ),
           ),
           ColoredBox(
@@ -135,7 +168,9 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
                             child: TextField(
                               controller: _manualController,
                               autofocus: true,
-                              keyboardType: TextInputType.number,
+                              keyboardType: TextInputType.text,
+                              autocorrect: false,
+                              enableSuggestions: false,
                               decoration: const InputDecoration(
                                 labelText: 'Barcode number',
                               ),
