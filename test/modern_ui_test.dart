@@ -83,6 +83,7 @@ void main() {
         store.addToCart(product);
         store.completeSale(paymentType: PaymentType.cash, amountReceived: 50);
         store.addToCart(product);
+        await store.dismissTutorial();
         await tester.pumpWidget(SariScanApp(store: store));
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);

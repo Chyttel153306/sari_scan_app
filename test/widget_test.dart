@@ -68,6 +68,9 @@ void main() {
     await tester.tap(find.text('Continue with Phone Security'));
     await tester.pumpAndSettle();
 
+    expect(find.text('Your products live here'), findsOneWidget);
+    await tester.tap(find.text('Skip tutorial'));
+    await tester.pumpAndSettle();
     expect(find.text('Tindahan POS'), findsOneWidget);
     expect(find.text('No matching products found.'), findsOneWidget);
   });

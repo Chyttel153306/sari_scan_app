@@ -2,16 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../store/app_store.dart';
+import '../l10n/app_language.dart';
+import '../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_choice.dart';
 import '../utils/formatters.dart';
 import '../widgets/design_system.dart';
 import 'login_screen.dart';
+import 'tutorial_screen.dart';
 
 enum _SyncAction { create, join, push, pull, leave }
 
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key, required this.store});
+  const SettingsScreen({super.key, required this.store, this.onStartTutorial});
+  final VoidCallback? onStartTutorial;
 
   final AppStore store;
 
@@ -21,12 +25,17 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _savingTheme = false;
+  bool _savingLanguage = false;
   bool _savingName = false;
   bool _syncing = false;
   bool _backfillingPhotos = false;
 
   bool get _busy =>
-      _syncing || _backfillingPhotos || _savingName || _savingTheme;
+      _syncing ||
+      _backfillingPhotos ||
+      _savingName ||
+      _savingTheme ||
+      _savingLanguage;
 
   String _formatPercent(double value) => value == value.roundToDouble()
       ? value.toStringAsFixed(0)
@@ -37,6 +46,70 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _copySyncCode() async {
+    try {
+      await Clipboard.setData(ClipboardData(text: widget.store.syncCode!));
+      if (!mounted) return;
+      _feedback(context.tr('Sync code copied.'));
+    } catch (_) {
+      if (!mounted) return;
+      _feedback(context.tr('Could not copy the code. Try again.'));
+    }
+  }
+
+  Future<void> _chooseLanguage() async {
+    final language = await showModalBottomSheet<AppLanguage>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) => SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                context.tr('Choose a language'),
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                context.tr(
+                  'Applies across SariScan and stays saved on this phone.',
+                ),
+              ),
+              const SizedBox(height: 12),
+              for (final option in AppLanguage.values)
+                ListTile(
+                  key: ValueKey('language-${option.code}'),
+                  title: Text(option.label),
+                  selected: widget.store.language == option,
+                  selectedColor: AppTheme.of(context).emeraldDeep,
+                  selectedTileColor: AppTheme.of(context).mint,
+                  leading: const Icon(Icons.language_rounded),
+                  trailing: Icon(
+                    widget.store.language == option
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_unchecked,
+                  ),
+                  onTap: () => Navigator.pop(context, option),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted || language == null || language == widget.store.language) {
+      return;
+    }
+    setState(() => _savingLanguage = true);
+    final error = await widget.store.updateLanguage(language);
+    if (!mounted) return;
+    setState(() => _savingLanguage = false);
+    _feedback(error ?? context.tr('Language saved.'));
   }
 
   Future<void> _chooseTheme() async {
@@ -56,12 +129,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'Choose a theme',
+                  context.tr("Choose a theme"),
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 6),
-                const Text(
-                  'Applies across SariScan and stays saved on this phone.',
+                Text(
+                  context.tr(
+                    "Applies across SariScan and stays saved on this phone.",
+                  ),
                 ),
                 const SizedBox(height: 16),
                 for (final choice in ThemeChoice.values)
@@ -86,9 +161,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         color: AppPalette.forChoice(choice).emeraldDeep,
                       ),
                     ),
-                    title: Text(choice.label),
+                    title: Text(context.tr(choice.label)),
                     subtitle: choice == ThemeChoice.defaultTheme
-                        ? const Text('Original SariScan green')
+                        ? Text(context.tr("Original SariScan green"))
                         : null,
                     trailing: Icon(
                       widget.store.themeChoice == choice
@@ -111,7 +186,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final error = await widget.store.updateTheme(choice);
     if (!mounted) return;
     setState(() => _savingTheme = false);
-    _feedback(error ?? '${choice.label} theme saved.');
+    _feedback(
+      error ?? context.tr("{0} theme saved.", args: [context.tr(choice.label)]),
+    );
   }
 
   Future<void> _editMarkup() async {
@@ -120,7 +197,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       barrierDismissible: false,
       builder: (_) => _MarkupDialog(store: widget.store),
     );
-    if (saved == true) _feedback('Default markup updated.');
+    if (saved == true && mounted) {
+      _feedback(context.tr("Default markup updated."));
+    }
   }
 
   Future<void> _showInfo(String title, List<Widget> content) =>
@@ -136,7 +215,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Done'),
+              child: Text(context.tr("Done")),
             ),
           ],
         ),
@@ -146,19 +225,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Log out of SariScan?'),
-        content: const Text(
-          'Your saved store data will stay on this phone. '
-          'Your current cart will be cleared. Use phone security to sign in again.',
+        title: Text(context.tr("Log out of SariScan?")),
+        content: Text(
+          context.tr(
+            "Your saved store data will stay on this phone. Your current cart will be cleared. Use phone security to sign in again.",
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(context.tr("Cancel")),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Log out'),
+            child: Text(context.tr("Log out")),
           ),
         ],
       ),
@@ -183,12 +263,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (error != null) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(error)));
+      ).showSnackBar(SnackBar(content: Text(context.tr(error))));
       return;
     }
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('Store name updated.')));
+    ).showSnackBar(SnackBar(content: Text(context.tr("Store name updated."))));
   }
 
   // -----------------------------------------------------------------
@@ -200,9 +280,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// photos to other phones too.
   Future<void> _backfillPhotos() async {
     if (widget.store.syncCode == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Set up cloud sync first.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr("Set up cloud sync first."))),
+      );
       return;
     }
     setState(() => _backfillingPhotos = true);
@@ -213,8 +293,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       SnackBar(
         content: Text(
           widget.store.photoSyncWarning ??
-              '$count photo(s) uploaded. Next, tap Sync store > Upload changes '
-                  'to share photo links, then Download latest on the other phone.',
+              context.tr(
+                "{0} photo(s) uploaded. Next, tap Sync store > Upload changes to share photo links, then Download latest on the other phone.",
+                args: [count],
+              ),
         ),
       ),
     );
@@ -237,7 +319,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'Sync this store',
+                context.tr("Sync this store"),
                 style: Theme.of(
                   context,
                 ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
@@ -247,18 +329,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.cloud_upload_outlined),
-                  title: const Text('Create sync code'),
-                  subtitle: const Text(
-                    "Upload this phone's data to a new cloud store",
+                  title: Text(context.tr("Create sync code")),
+                  subtitle: Text(
+                    context.tr("Upload this phone's data to a new cloud store"),
                   ),
                   onTap: () => Navigator.pop(context, _SyncAction.create),
                 ),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.link_rounded),
-                  title: const Text('Join with a code'),
-                  subtitle: const Text(
-                    'Connect using another phone’s sync code',
+                  title: Text(context.tr("Join with a code")),
+                  subtitle: Text(
+                    context.tr("Connect using another phone’s sync code"),
                   ),
                   onTap: () => Navigator.pop(context, _SyncAction.join),
                 ),
@@ -266,18 +348,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.cloud_upload_outlined),
-                  title: const Text('Upload changes'),
-                  subtitle: const Text(
-                    "Replace cloud data with this phone's data",
+                  title: Text(context.tr("Upload changes")),
+                  subtitle: Text(
+                    context.tr("Replace cloud data with this phone's data"),
                   ),
                   onTap: () => Navigator.pop(context, _SyncAction.push),
                 ),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.cloud_download_outlined),
-                  title: const Text('Download latest'),
-                  subtitle: const Text(
-                    "Replace this phone's data with cloud data",
+                  title: Text(context.tr("Download latest")),
+                  subtitle: Text(
+                    context.tr("Replace this phone's data with cloud data"),
                   ),
                   onTap: () => Navigator.pop(context, _SyncAction.pull),
                 ),
@@ -287,9 +369,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     Icons.link_off_rounded,
                     color: Theme.of(context).colorScheme.error,
                   ),
-                  title: const Text('Unlink this phone'),
-                  subtitle: const Text(
-                    'Clear this phone; keep the store in the cloud',
+                  title: Text(context.tr("Unlink this phone")),
+                  subtitle: Text(
+                    context.tr("Clear this phone; keep the store in the cloud"),
                   ),
                   onTap: () => Navigator.pop(context, _SyncAction.leave),
                 ),
@@ -311,11 +393,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     switch (action) {
       case _SyncAction.create:
         await _confirmAndRun(
-          title: 'Create sync code?',
-          message:
-              "Upload this phone's data. Use the code to link other phones.",
-          confirmLabel: 'Create',
-          successMessage: 'Sync code created.',
+          title: context.tr("Create sync code?"),
+          message: context.tr(
+            "Upload this phone's data. Use the code to link other phones.",
+          ),
+          confirmLabel: context.tr("Create"),
+          successMessage: context.tr("Sync code created."),
           run: () => widget.store.startCloudSync(),
         );
         break;
@@ -324,24 +407,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
         break;
       case _SyncAction.push:
         await _confirmAndRun(
-          title: 'Upload to cloud?',
-          message:
-              "Replace cloud data with this phone's data. "
-              'Other phones receive changes on their next download.',
-          confirmLabel: 'Upload',
-          successMessage: 'Uploaded to cloud.',
+          title: context.tr("Upload to cloud?"),
+          message: context.tr(
+            "Replace cloud data with this phone's data. Other phones receive changes on their next download.",
+          ),
+          confirmLabel: context.tr("Upload"),
+          successMessage: context.tr("Uploaded to cloud."),
           run: () => widget.store.pushToCloud(),
         );
         break;
       case _SyncAction.pull:
         await _confirmAndRun(
-          title: 'Download from cloud?',
-          message:
-              "Replace this phone's data with cloud data. "
-              'Unsynced changes will be lost.',
-          confirmLabel: 'Download',
+          title: context.tr("Download from cloud?"),
+          message: context.tr(
+            "Replace this phone's data with cloud data. Unsynced changes will be lost.",
+          ),
+          confirmLabel: context.tr("Download"),
           isDestructive: true,
-          successMessage: 'Downloaded from cloud.',
+          successMessage: context.tr("Downloaded from cloud."),
           run: () => widget.store.pullFromCloud(),
         );
         break;
@@ -367,7 +450,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(context.tr("Cancel")),
           ),
           FilledButton(
             style: isDestructive
@@ -391,7 +474,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         content: Text(
           result.isSuccess
               ? '$successMessage${result.warning == null ? '' : ' ${result.warning}'}'
-              : (result.error ?? 'Something went wrong.'),
+              : (result.error ?? context.tr("Something went wrong.")),
         ),
       ),
     );
@@ -407,22 +490,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Replace this phone's data?"),
-        content: const Text(
-          "Replace this phone's data with the linked store's cloud data. "
-          'Unsynced changes will be lost.',
+        title: Text(context.tr("Replace this phone's data?")),
+        content: Text(
+          context.tr(
+            "Replace this phone's data with the linked store's cloud data. Unsynced changes will be lost.",
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(context.tr("Cancel")),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.error,
             ),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Join & replace'),
+            child: Text(context.tr("Join & replace")),
           ),
         ],
       ),
@@ -438,8 +522,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Joined and downloaded cloud data.'
-            '${result.warning == null ? '' : ' ${result.warning}'}',
+            context.tr(
+              "Joined and downloaded cloud data.{0}",
+              args: [result.warning == null ? '' : ' ${result.warning}'],
+            ),
           ),
         ),
       );
@@ -452,14 +538,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Could not join store'),
+        title: Text(context.tr("Could not join store")),
         content: Text(
-          result.error ?? 'Store not found. Check the sync code and try again.',
+          result.error ??
+              context.tr("Store not found. Check the sync code and try again."),
         ),
         actions: [
           FilledButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
+            child: Text(context.tr("OK")),
           ),
         ],
       ),
@@ -470,23 +557,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Unlink this phone?'),
-        content: const Text(
-          'Remove all store records and cached product photos from this phone. '
-          'Changes you have not uploaded will be lost. Cloud data stays saved. '
-          'Keep your sync code to download the store again.',
+        title: Text(context.tr("Unlink this phone?")),
+        content: Text(
+          context.tr(
+            "Remove all store records and cached product photos from this phone. Changes you have not uploaded will be lost. Cloud data stays saved. Keep your sync code to download the store again.",
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(context.tr("Cancel")),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.error,
             ),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Unlink'),
+            child: Text(context.tr("Unlink")),
           ),
         ],
       ),
@@ -500,7 +587,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       SnackBar(
         content: Text(
           error ??
-              'Phone cleared and unlinked. Your cloud store is still saved.',
+              context.tr(
+                "Phone cleared and unlinked. Your cloud store is still saved.",
+              ),
         ),
       ),
     );
@@ -514,7 +603,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         final palette = AppTheme.of(context);
         final linked = widget.store.syncCode != null;
         return Scaffold(
-          appBar: AppBar(title: const Text('Settings')),
+          appBar: AppBar(title: Text(context.tr("Settings"))),
           body: SafeArea(
             top: false,
             child: Center(
@@ -536,7 +625,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'YOUR STORE',
+                                  context.tr("YOUR STORE"),
                                   style: Theme.of(context).textTheme.labelMedium
                                       ?.copyWith(
                                         color: palette.muted,
@@ -546,12 +635,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 const SizedBox(height: 4),
                                 Text(
                                   widget.store.registeredOwnerName ??
-                                      'Store Owner',
+                                      context.tr("Store Owner"),
                                   style: Theme.of(context).textTheme.titleLarge,
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  'Make SariScan work for your store.',
+                                  context.tr(
+                                    "Make SariScan work for your store.",
+                                  ),
                                   style: TextStyle(
                                     color: palette.muted,
                                     fontSize: 13,
@@ -565,14 +656,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                     _SettingsGroup(
-                      title: 'Store account',
+                      title: context.tr("Store account"),
                       children: [
                         _SettingsRow(
                           icon: Icons.storefront_outlined,
-                          title: 'Store name',
+                          title: context.tr("Store name"),
                           description:
                               widget.store.registeredOwnerName ??
-                              'No store registered',
+                              context.tr("No store registered"),
                           busy: _savingName,
                           onTap: _busy || !widget.store.hasLocalAccount
                               ? null
@@ -580,43 +671,58 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                         _SettingsRow(
                           icon: Icons.lock_outline_rounded,
-                          title: 'Phone security',
-                          description: 'Protected by your device lock',
-                          onTap: () => _showInfo('Phone security', const [
+                          title: context.tr("Phone security"),
+                          description: context.tr(
+                            "Protected by your device lock",
+                          ),
+                          onTap: () => _showInfo(context.tr("Phone security"), [
                             Text(
-                              'SariScan uses your phone\'s fingerprint, face unlock, PIN, '
-                              'pattern, or password when you sign in.',
+                              context.tr(
+                                "SariScan uses your phone's fingerprint, face unlock, PIN, pattern, or password when you sign in.",
+                              ),
                             ),
                             SizedBox(height: 16),
                             Text(
-                              'Manage these methods in your phone settings. '
-                              'There is no separate SariScan password.',
+                              context.tr(
+                                "Manage these methods in your phone settings. There is no separate SariScan password.",
+                              ),
                             ),
                           ]),
                         ),
                       ],
                     ),
                     _SettingsGroup(
-                      title: 'Preferences',
+                      title: context.tr("Preferences"),
                       children: [
                         _SettingsRow(
+                          icon: Icons.language_rounded,
+                          title: context.tr('Language'),
+                          description: widget.store.language.label,
+                          busy: _savingLanguage,
+                          onTap: _busy ? null : _chooseLanguage,
+                        ),
+                        _SettingsRow(
                           icon: Icons.palette_outlined,
-                          title: 'Appearance',
-                          description:
-                              '${widget.store.themeChoice.label} theme',
+                          title: context.tr("Appearance"),
+                          description: context.tr(
+                            "{0} theme",
+                            args: [context.tr(widget.store.themeChoice.label)],
+                          ),
                           busy: _savingTheme,
                           onTap: _busy ? null : _chooseTheme,
                         ),
                         _SettingsRow(
                           icon: Icons.percent_rounded,
-                          title: 'Default markup',
-                          description:
-                              '${_formatPercent(widget.store.markupPercent)}% added to cost for suggested prices',
+                          title: context.tr("Default markup"),
+                          description: context.tr(
+                            "{0}% added to cost for suggested prices",
+                            args: [_formatPercent(widget.store.markupPercent)],
+                          ),
                           onTap: _busy ? null : _editMarkup,
                         ),
                       ],
                     ),
-                    const SectionHeading('Data & sync'),
+                    SectionHeading(context.tr("Data & sync")),
                     const SizedBox(height: 12),
                     Card(
                       elevation: 1,
@@ -629,19 +735,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 ? Icons.offline_pin_outlined
                                 : Icons.error_outline_rounded,
                             title: widget.store.storageError == null
-                                ? 'Available offline'
-                                : 'Storage needs attention',
+                                ? context.tr("Available offline")
+                                : context.tr("Storage needs attention"),
                             description:
                                 widget.store.storageError ??
-                                'Products, sales, and customer balances stay on this phone.',
-                            onTap: () => _showInfo('Your store data', [
-                              const Text(
-                                'Your store records are saved on this phone so you can keep selling offline.',
+                                context.tr(
+                                  "Products, sales, and customer balances stay on this phone.",
+                                ),
+                            onTap: () => _showInfo(context.tr("Your store data"), [
+                              Text(
+                                context.tr(
+                                  "Your store records are saved on this phone so you can keep selling offline.",
+                                ),
                               ),
                               const SizedBox(height: 16),
-                              const Text(
-                                'Cloud sync is manual. Upload your changes before downloading on another phone. '
-                                'A download replaces the receiving phone\'s records.',
+                              Text(
+                                context.tr(
+                                  "Cloud sync is manual. Upload your changes before downloading on another phone. A download replaces the receiving phone's records.",
+                                ),
                               ),
                               if (widget.store.storageError != null) ...[
                                 const SizedBox(height: 16),
@@ -667,7 +778,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: Text(
-                                        'Cloud sync',
+                                        context.tr("Cloud sync"),
                                         style: Theme.of(
                                           context,
                                         ).textTheme.titleMedium,
@@ -678,10 +789,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 const SizedBox(height: 8),
                                 Text(
                                   !widget.store.isCloudSyncAvailable
-                                      ? 'Unavailable right now. You can continue using your store offline.'
+                                      ? context.tr(
+                                          "Unavailable right now. You can continue using your store offline.",
+                                        )
                                       : linked
-                                      ? 'Linked to your cloud store. Sync when you are ready.'
-                                      : 'Link your phones with a sync code to share store records.',
+                                      ? context.tr(
+                                          "Linked to your cloud store. Sync when you are ready.",
+                                        )
+                                      : context.tr(
+                                          "Link your phones with a sync code to share store records.",
+                                        ),
                                   style: TextStyle(
                                     fontSize: 13,
                                     height: 1.5,
@@ -709,7 +826,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                                 CrossAxisAlignment.start,
                                             children: [
                                               Text(
-                                                'SYNC CODE',
+                                                context.tr("SYNC CODE"),
                                                 style: Theme.of(context)
                                                     .textTheme
                                                     .labelSmall
@@ -732,21 +849,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                           ),
                                         ),
                                         IconButton(
-                                          tooltip: 'Copy sync code',
-                                          onPressed: () async {
-                                            try {
-                                              await Clipboard.setData(
-                                                ClipboardData(
-                                                  text: widget.store.syncCode!,
-                                                ),
-                                              );
-                                              _feedback('Sync code copied.');
-                                            } catch (_) {
-                                              _feedback(
-                                                'Could not copy the code. Try again.',
-                                              );
-                                            }
-                                          },
+                                          tooltip: context.tr("Copy sync code"),
+                                          onPressed: _copySyncCode,
                                           icon: const Icon(
                                             Icons.copy_rounded,
                                             size: 20,
@@ -758,8 +862,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   const SizedBox(height: 10),
                                   Text(
                                     widget.store.lastSyncedAt == null
-                                        ? 'No sync recorded yet'
-                                        : 'Last synced ${shortDateTime(widget.store.lastSyncedAt!)}',
+                                        ? context.tr("No sync recorded yet")
+                                        : context.tr(
+                                            "Last synced {0}",
+                                            args: [
+                                              shortDateTime(
+                                                widget.store.lastSyncedAt!,
+                                              ),
+                                            ],
+                                          ),
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: palette.muted,
@@ -775,10 +886,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                         : const Icon(Icons.sync_rounded),
                                     label: Text(
                                       _syncing
-                                          ? 'Syncing store...'
+                                          ? context.tr("Syncing store...")
                                           : linked
-                                          ? 'Sync store'
-                                          : 'Set up cloud sync',
+                                          ? context.tr("Sync store")
+                                          : context.tr("Set up cloud sync"),
                                     ),
                                   ),
                                 ],
@@ -789,12 +900,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             const Divider(height: 1, indent: 64, endIndent: 16),
                             _SettingsRow(
                               icon: Icons.add_photo_alternate_outlined,
-                              title: 'Upload product photos',
+                              title: context.tr("Upload product photos"),
                               description: !linked
-                                  ? 'Set up cloud sync to share photos'
+                                  ? context.tr(
+                                      "Set up cloud sync to share photos",
+                                    )
                                   : _backfillingPhotos
-                                  ? 'Uploading photos...'
-                                  : 'Retry photos, then sync to share their links',
+                                  ? context.tr("Uploading photos...")
+                                  : context.tr(
+                                      "Retry photos, then sync to share their links",
+                                    ),
                               busy: _backfillingPhotos,
                               onTap: _busy || !linked ? null : _backfillPhotos,
                             ),
@@ -820,67 +935,98 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     const SizedBox(height: 24),
                     _SettingsGroup(
-                      title: 'Help & information',
+                      title: context.tr("Help & information"),
                       children: [
                         _SettingsRow(
                           icon: Icons.help_outline_rounded,
-                          title: 'Help & FAQ',
-                          description: 'Pricing, backups, and switching phones',
-                          onTap: () => _showInfo('Help & FAQ', const [
+                          title: context.tr("App tutorial"),
+                          description: context.tr(
+                            "Step-by-step help with every main feature",
+                          ),
+                          onTap:
+                              widget.onStartTutorial ??
+                              () => Navigator.push<void>(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const TutorialScreen(),
+                                ),
+                              ),
+                        ),
+                        _SettingsRow(
+                          icon: Icons.help_outline_rounded,
+                          title: context.tr("Help & FAQ"),
+                          description: context.tr(
+                            "Pricing, backups, and switching phones",
+                          ),
+                          onTap: () => _showInfo(context.tr("Help & FAQ"), [
                             _HelpAnswer(
-                              'How does markup work?',
-                              'A 10% markup on a ₱100 cost suggests a ₱110 selling price. You can still set each product\'s price yourself.',
+                              context.tr("How does markup work?"),
+                              context.tr(
+                                "A 10% markup on a ₱100 cost suggests a ₱110 selling price. You can still set each product's price yourself.",
+                              ),
                             ),
                             _HelpAnswer(
-                              'How do I use another phone?',
-                              'Create a sync code on the phone with your store data. Join with that code on the other phone. Joining replaces its local records.',
+                              context.tr("How do I use another phone?"),
+                              context.tr(
+                                "Create a sync code on the phone with your store data. Join with that code on the other phone. Joining replaces its local records.",
+                              ),
                             ),
                             _HelpAnswer(
-                              'When should I sync?',
-                              'Upload after making changes, then download on the other phone. Sync is manual; avoid editing both phones before syncing.',
+                              context.tr("When should I sync?"),
+                              context.tr(
+                                "Upload after making changes, then download on the other phone. Sync is manual; avoid editing both phones before syncing.",
+                              ),
                             ),
                             _HelpAnswer(
-                              'Why are photos missing?',
-                              'Use Upload product photos, then Sync store > Upload changes. On the other phone, choose Download latest.',
+                              context.tr("Why are photos missing?"),
+                              context.tr(
+                                "Use Upload product photos, then Sync store > Upload changes. On the other phone, choose Download latest.",
+                              ),
                             ),
                             _HelpAnswer(
-                              'What happens when I log out?',
-                              'Saved records stay on this phone. The current cart is cleared, and signing in again requires phone security.',
+                              context.tr("What happens when I log out?"),
+                              context.tr(
+                                "Saved records stay on this phone. The current cart is cleared, and signing in again requires phone security.",
+                              ),
                             ),
                           ]),
                         ),
                         _SettingsRow(
                           icon: Icons.info_outline_rounded,
-                          title: 'About SariScan',
-                          description: 'Scan. Sell. Track.',
+                          title: context.tr("About SariScan"),
+                          description: context.tr("Scan. Sell. Track."),
                           onTap: () => showAboutDialog(
                             context: context,
                             applicationName: 'SariScan',
                             applicationIcon: const BrandMark(),
                             children: [
-                              const Text(
-                                'Your store\'s daily companion for products, sales, stock, '
-                                'and customer balances. Built to keep your store moving offline.',
+                              Text(
+                                context.tr(
+                                  "Your store's daily companion for products, sales, stock, and customer balances. Built to keep your store moving offline.",
+                                ),
                               ),
                             ],
                           ),
                         ),
                       ],
                     ),
-                    const SectionHeading('Account actions'),
+                    SectionHeading(context.tr("Account actions")),
                     const SizedBox(height: 8),
                     _SettingsRow(
                       icon: Icons.logout_rounded,
-                      title: 'Log out',
-                      description: 'Keep saved store data on this phone',
+                      title: context.tr("Log out"),
+                      description: context.tr(
+                        "Keep saved store data on this phone",
+                      ),
                       onTap: _busy ? null : _confirmLogout,
                     ),
                     if (linked)
                       _SettingsRow(
                         icon: Icons.link_off_rounded,
-                        title: 'Unlink this phone',
-                        description:
-                            'Clear local records; keep your cloud store',
+                        title: context.tr("Unlink this phone"),
+                        description: context.tr(
+                          "Clear local records; keep your cloud store",
+                        ),
                         destructive: true,
                         onTap: _busy ? null : _confirmLeave,
                       ),
@@ -938,16 +1084,16 @@ class _MarkupDialogState extends State<_MarkupDialog> {
       final discard = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Discard markup changes?'),
-          content: const Text('Your new markup has not been saved.'),
+          title: Text(context.tr("Discard markup changes?")),
+          content: Text(context.tr("Your new markup has not been saved.")),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Keep editing'),
+              child: Text(context.tr("Keep editing")),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Discard'),
+              child: Text(context.tr("Discard")),
             ),
           ],
         ),
@@ -1005,13 +1151,14 @@ class _MarkupDialogState extends State<_MarkupDialog> {
       },
       child: AlertDialog(
         scrollable: true,
-        title: const Text('Default markup'),
+        title: Text(context.tr("Default markup")),
         content: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
-              'Add a percentage to cost to suggest selling prices. '
-              'Existing product prices stay the same.',
+            Text(
+              context.tr(
+                "Add a percentage to cost to suggest selling prices. Existing product prices stay the same.",
+              ),
             ),
             const SizedBox(height: 20),
             TextField(
@@ -1030,10 +1177,10 @@ class _MarkupDialogState extends State<_MarkupDialog> {
                 ),
               ],
               decoration: InputDecoration(
-                labelText: 'Markup',
+                labelText: context.tr("Markup"),
                 suffixText: '%',
                 prefixIcon: const Icon(Icons.percent_rounded),
-                errorText: _error,
+                errorText: _error == null ? null : context.tr(_error!),
                 errorMaxLines: 5,
               ),
               onChanged: (_) => setState(() => _error = null),
@@ -1052,7 +1199,7 @@ class _MarkupDialogState extends State<_MarkupDialog> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'PRICE PREVIEW',
+                    context.tr("PRICE PREVIEW"),
                     style: Theme.of(context).textTheme.labelSmall,
                   ),
                   const SizedBox(height: 6),
@@ -1060,8 +1207,14 @@ class _MarkupDialogState extends State<_MarkupDialog> {
                     preview == null ||
                             !preview.isFinite ||
                             !(100 * (1 + preview / 100)).isFinite
-                        ? 'Enter a markup to preview a price.'
-                        : '${money(100)} cost → ${money(100 * (1 + preview / 100))} selling price',
+                        ? context.tr("Enter a markup to preview a price.")
+                        : context.tr(
+                            "{0} cost → {1} selling price",
+                            args: [
+                              money(100),
+                              money(100 * (1 + preview / 100)),
+                            ],
+                          ),
                     style: const TextStyle(fontSize: 14, height: 1.5),
                   ),
                 ],
@@ -1070,10 +1223,10 @@ class _MarkupDialogState extends State<_MarkupDialog> {
             const SizedBox(height: 12),
             Text(
               _saving
-                  ? 'Saving markup...'
+                  ? context.tr("Saving markup...")
                   : _dirty
-                  ? 'Unsaved changes'
-                  : 'Saved on this phone',
+                  ? context.tr("Unsaved changes")
+                  : context.tr("Saved on this phone"),
               style: TextStyle(fontSize: 12, color: AppTheme.of(context).muted),
             ),
           ],
@@ -1081,11 +1234,13 @@ class _MarkupDialogState extends State<_MarkupDialog> {
         actions: [
           TextButton(
             onPressed: _saving ? null : _close,
-            child: const Text('Cancel'),
+            child: Text(context.tr("Cancel")),
           ),
           FilledButton(
             onPressed: _saving || !_dirty ? null : _save,
-            child: Text(_saving ? 'Saving...' : 'Save markup'),
+            child: Text(
+              _saving ? context.tr("Saving...") : context.tr("Save markup"),
+            ),
           ),
         ],
       ),
@@ -1245,20 +1400,20 @@ class _JoinSyncCodeDialogState extends State<_JoinSyncCodeDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       scrollable: true,
-      title: const Text('Join with a code'),
+      title: Text(context.tr("Join with a code")),
       content: TextField(
         controller: _controller,
         autofocus: true,
         textCapitalization: TextCapitalization.characters,
-        decoration: const InputDecoration(labelText: 'Sync code'),
+        decoration: InputDecoration(labelText: context.tr("Sync code")),
         onSubmitted: (_) => _submit(),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: Text(context.tr("Cancel")),
         ),
-        FilledButton(onPressed: _submit, child: const Text('Join')),
+        FilledButton(onPressed: _submit, child: Text(context.tr("Join"))),
       ],
     );
   }

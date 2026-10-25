@@ -1,0 +1,27 @@
+﻿[
+    {
+        "name":  "format_initial",
+        "exitCode":  1,
+        "seconds":  1.2790192
+    },
+    {
+        "name":  "analyze_initial",
+        "exitCode":  0,
+        "seconds":  10.9249864
+    },
+    {
+        "name":  "test_initial",
+        "exitCode":  0,
+        "seconds":  44.3849212
+    },
+    {
+        "name":  "outdated",
+        "exitCode":  0,
+        "seconds":  4.2919668
+    },
+    {
+        "name":  "apk_initial",
+        "exitCode":  0,
+        "seconds":  213.9090003
+    }
+]

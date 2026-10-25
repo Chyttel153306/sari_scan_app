@@ -19,10 +19,18 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// over once with "Upload existing photos now" in Settings; after that this
 /// legacy branch (and the `http` package) can be removed.
 class SupabaseImageService {
-  SupabaseImageService({SupabaseClient? client})
-    : _client = client ?? Supabase.instance.client;
+  SupabaseImageService({
+    SupabaseClient? client,
+    http.Client? httpClient,
+    this.requestTimeout = const Duration(seconds: 20),
+  }) : _client = client ?? Supabase.instance.client,
+       _httpClient = httpClient ?? http.Client(),
+       _ownsHttpClient = httpClient == null;
 
   final SupabaseClient _client;
+  final http.Client _httpClient;
+  final bool _ownsHttpClient;
+  final Duration requestTimeout;
 
   static const bucket = 'product-images';
 
@@ -39,7 +47,7 @@ class SupabaseImageService {
 
   Future<void> _ensureSignedIn() async {
     if (_client.auth.currentSession != null) return;
-    await _client.auth.signInAnonymously();
+    await _client.auth.signInAnonymously().timeout(requestTimeout);
   }
 
   static String _extensionOf(String path) {
@@ -83,7 +91,8 @@ class SupabaseImageService {
             contentType: _contentTypes[extension],
             upsert: false,
           ),
-        );
+        )
+        .timeout(requestTimeout);
     return path;
   }
 
@@ -91,7 +100,9 @@ class SupabaseImageService {
   /// a Storage path, or a legacy ImgBB URL.
   Future<List<int>> downloadImageBytes(String reference) async {
     if (isLegacyUrl(reference)) {
-      final response = await http.get(Uri.parse(reference));
+      final response = await _httpClient
+          .get(Uri.parse(reference))
+          .timeout(requestTimeout);
       if (response.statusCode != 200) {
         throw HttpException(
           'Could not download image (status ${response.statusCode}).',
@@ -100,7 +111,10 @@ class SupabaseImageService {
       return response.bodyBytes;
     }
     await _ensureSignedIn();
-    return _client.storage.from(bucket).download(reference);
+    return _client.storage
+        .from(bucket)
+        .download(reference)
+        .timeout(requestTimeout);
   }
 
   /// Deletes a photo from Storage. Legacy web URLs are ignored — this app
@@ -108,8 +122,13 @@ class SupabaseImageService {
   Future<void> deleteImage(String reference) async {
     if (reference.isEmpty || isLegacyUrl(reference)) return;
     await _ensureSignedIn();
-    await _client.storage.from(bucket).remove([reference]);
+    await _client.storage
+        .from(bucket)
+        .remove([reference])
+        .timeout(requestTimeout);
   }
 
-  void dispose() {}
+  void dispose() {
+    if (_ownsHttpClient) _httpClient.close();
+  }
 }

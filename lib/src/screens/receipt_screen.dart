@@ -1,3 +1,4 @@
+import '../l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
@@ -15,7 +16,10 @@ class ReceiptScreen extends StatelessWidget {
 
   final SaleRecord sale;
 
-  Future<Uint8List> _buildReceiptPdf(PdfPageFormat format) async {
+  Future<Uint8List> _buildReceiptPdf(
+    PdfPageFormat format,
+    AppStrings strings,
+  ) async {
     final logoData = await rootBundle.load(BrandMark.logoAsset);
     final logo = pw.MemoryImage(
       logoData.buffer.asUint8List(
@@ -31,7 +35,7 @@ class ReceiptScreen extends StatelessWidget {
       pw.MultiPage(
         pageFormat: format,
         margin: const pw.EdgeInsets.all(32),
-        build: (context) => [
+        build: (_) => [
           pw.Center(
             child: pw.Image(
               logo,
@@ -41,11 +45,11 @@ class ReceiptScreen extends StatelessWidget {
             ),
           ),
           pw.SizedBox(height: 14),
-          _pdfRow('Receipt', receiptNumber(sale.id)),
-          _pdfRow('Date', shortDateTime(sale.createdAt)),
+          _pdfRow(strings.tr('Receipt'), receiptNumber(sale.id)),
+          _pdfRow(strings.tr('Date'), shortDateTime(sale.createdAt)),
           _pdfRow(
-            'Payment',
-            sale.paymentType == PaymentType.cash ? 'Cash' : 'Utang',
+            strings.tr('Payment'),
+            sale.paymentType == PaymentType.cash ? strings.tr('Cash') : 'Utang',
           ),
           pw.Divider(),
           ...sale.items.map(
@@ -56,8 +60,14 @@ class ReceiptScreen extends StatelessWidget {
                 children: [
                   pw.Expanded(
                     child: pw.Text(
-                      '${item.quantity} x ${item.productName}\n'
-                      'PHP ${item.unitPrice.toStringAsFixed(2)} each',
+                      strings.tr(
+                        '{0} x {1}\nPHP {2} each',
+                        args: [
+                          item.quantity,
+                          item.productName,
+                          item.unitPrice.toStringAsFixed(2),
+                        ],
+                      ),
                     ),
                   ),
                   pw.Text('PHP ${item.subtotal.toStringAsFixed(2)}'),
@@ -66,20 +76,24 @@ class ReceiptScreen extends StatelessWidget {
             ),
           ),
           pw.Divider(),
-          _pdfRow('Total', 'PHP ${sale.total.toStringAsFixed(2)}', bold: true),
+          _pdfRow(
+            strings.tr('Total'),
+            'PHP ${sale.total.toStringAsFixed(2)}',
+            bold: true,
+          ),
           if (sale.paymentType == PaymentType.cash) ...[
             _pdfRow(
-              'Cash received',
+              strings.tr('Cash received'),
               'PHP ${sale.amountReceived.toStringAsFixed(2)}',
             ),
             _pdfRow(
-              'Change',
+              strings.tr('Change'),
               'PHP ${sale.change.toStringAsFixed(2)}',
               bold: true,
             ),
           ],
           pw.SizedBox(height: 18),
-          pw.Center(child: pw.Text('Thank you!')),
+          pw.Center(child: pw.Text(strings.tr("Thank you!"))),
         ],
       ),
     );
@@ -101,22 +115,27 @@ class ReceiptScreen extends StatelessWidget {
   }
 
   Future<void> _print(BuildContext context) async {
+    final strings = context.strings;
     try {
       await Printing.layoutPdf(
         name: 'SariScan-${receiptNumber(sale.id)}',
-        onLayout: _buildReceiptPdf,
+        onLayout: (format) => _buildReceiptPdf(format, strings),
       );
     } catch (error) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not open printing: $error')),
+        SnackBar(
+          content: Text(
+            context.tr("Could not open printing: {0}", args: [error]),
+          ),
+        ),
       );
     }
   }
 
   Future<void> _share(BuildContext context) async {
     try {
-      final bytes = await _buildReceiptPdf(PdfPageFormat.a4);
+      final bytes = await _buildReceiptPdf(PdfPageFormat.a4, context.strings);
       await Printing.sharePdf(
         bytes: bytes,
         filename: 'SariScan-${receiptNumber(sale.id)}.pdf',
@@ -125,7 +144,11 @@ class ReceiptScreen extends StatelessWidget {
     } catch (error) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not share the receipt: $error')),
+        SnackBar(
+          content: Text(
+            context.tr("Could not share the receipt: {0}", args: [error]),
+          ),
+        ),
       );
     }
   }
@@ -134,7 +157,7 @@ class ReceiptScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final isCash = sale.paymentType == PaymentType.cash;
     return Scaffold(
-      appBar: AppBar(title: const Text('Transaction Complete')),
+      appBar: AppBar(title: Text(context.tr("Transaction Complete"))),
       bottomNavigationBar: SafeArea(
         top: false,
         child: Container(
@@ -153,7 +176,7 @@ class ReceiptScreen extends StatelessWidget {
                     child: OutlinedButton.icon(
                       onPressed: () => _print(context),
                       icon: const Icon(Icons.print_outlined, size: 18),
-                      label: const Text('Print'),
+                      label: Text(context.tr("Print")),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -161,7 +184,7 @@ class ReceiptScreen extends StatelessWidget {
                     child: OutlinedButton.icon(
                       onPressed: () => _share(context),
                       icon: const Icon(Icons.share_outlined, size: 18),
-                      label: const Text('Send'),
+                      label: Text(context.tr("Send")),
                     ),
                   ),
                 ],
@@ -170,7 +193,7 @@ class ReceiptScreen extends StatelessWidget {
               FilledButton.icon(
                 onPressed: () => Navigator.pop(context),
                 icon: const Icon(Icons.add_circle_outline, size: 19),
-                label: const Text('New Transaction'),
+                label: Text(context.tr("New Transaction")),
               ),
             ],
           ),
@@ -189,15 +212,19 @@ class ReceiptScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       SectionHeading(
-                        isCash ? 'Payment & change' : 'Utang recorded',
+                        isCash
+                            ? context.tr("Payment & change")
+                            : context.tr("Utang recorded"),
                         trailing: StatusPill(
-                          isCash ? 'Paid in cash' : 'Store credit',
+                          isCash
+                              ? context.tr("Paid in cash")
+                              : context.tr("Store credit"),
                           icon: Icons.check_circle_outline,
                         ),
                       ),
                       const SizedBox(height: 18),
                       Text(
-                        'Amount received',
+                        context.tr("Amount received"),
                         style: TextStyle(
                           fontSize: 11,
                           color: AppTheme.of(context).muted,
@@ -221,7 +248,7 @@ class ReceiptScreen extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Total due',
+                                  context.tr("Total due"),
                                   style: TextStyle(
                                     color: AppTheme.of(context).muted,
                                     fontSize: 11,
@@ -244,7 +271,9 @@ class ReceiptScreen extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  isCash ? 'Change due' : 'Added to ledger',
+                                  isCash
+                                      ? context.tr("Change due")
+                                      : context.tr("Added to ledger"),
                                   style: TextStyle(
                                     color: AppTheme.of(context).emerald,
                                     fontSize: 11,
@@ -301,15 +330,15 @@ class ReceiptScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 16),
                       _ReceiptRow(
-                        label: 'Receipt',
+                        label: context.tr("Receipt"),
                         value: receiptNumber(sale.id),
                       ),
                       _ReceiptRow(
-                        label: 'Date',
+                        label: context.tr("Date"),
                         value: shortDateTime(sale.createdAt),
                       ),
                       _ReceiptRow(
-                        label: 'Payment',
+                        label: context.tr("Payment"),
                         value: isCash ? 'Cash' : 'Utang',
                       ),
                       const Divider(height: 28),
@@ -317,7 +346,7 @@ class ReceiptScreen extends StatelessWidget {
                         children: [
                           Expanded(
                             child: Text(
-                              'ITEM DESCRIPTION',
+                              context.tr("ITEM DESCRIPTION"),
                               style: TextStyle(
                                 fontSize: 9,
                                 fontWeight: FontWeight.w700,
@@ -327,7 +356,7 @@ class ReceiptScreen extends StatelessWidget {
                             ),
                           ),
                           Text(
-                            'SUBTOTAL',
+                            context.tr("SUBTOTAL"),
                             style: TextStyle(
                               fontSize: 9,
                               fontWeight: FontWeight.w700,
@@ -386,23 +415,23 @@ class ReceiptScreen extends StatelessWidget {
                       ),
                       const Divider(height: 28),
                       _ReceiptRow(
-                        label: 'Total bill',
+                        label: context.tr("Total bill"),
                         value: money(sale.total),
                         emphasize: true,
                       ),
                       if (isCash) ...[
                         _ReceiptRow(
-                          label: 'Cash tendered',
+                          label: context.tr("Cash tendered"),
                           value: money(sale.amountReceived),
                         ),
                         _ReceiptRow(
-                          label: 'Change returned',
+                          label: context.tr("Change returned"),
                           value: money(sale.change),
                         ),
                       ],
                       const Divider(height: 28),
                       Text(
-                        'Salamat sa inyong pagtangkilik!',
+                        context.tr("Salamat sa inyong pagtangkilik!"),
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 11,

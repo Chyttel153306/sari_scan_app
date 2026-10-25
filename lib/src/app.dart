@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'screens/home_shell.dart';
+import 'l10n/app_localizations.dart';
 import 'screens/login_screen.dart';
 import 'services/phone_security_service.dart';
 import 'store/app_store.dart';
@@ -41,6 +42,8 @@ class _SariScanAppState extends State<SariScanApp> {
       listenable: store.dataChanges,
       builder: (context, _) => MaterialApp(
         title: 'SariScan',
+        builder: (context, child) =>
+            AppLanguageScope(language: store.language, child: child!),
         debugShowCheckedModeBanner: false,
         theme: AppTheme.forChoice(store.themeChoice),
         home: store.isAuthenticated

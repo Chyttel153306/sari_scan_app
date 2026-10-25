@@ -86,6 +86,7 @@ void main() {
       );
       addTearDown(store.dispose);
       await store.openSecureSession('Owner');
+      await store.dismissTutorial();
       await tester.pumpWidget(SariScanApp(store: store));
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Scan barcode'));
@@ -122,6 +123,7 @@ void main() {
     final store = AppStore(products: [product]);
     addTearDown(store.dispose);
     await store.openSecureSession('Owner');
+    await store.dismissTutorial();
     await tester.pumpWidget(SariScanApp(store: store));
     await tester.pumpAndSettle();
     for (final stocked in [false, true]) {
@@ -194,6 +196,7 @@ void main() {
         final store = AppStore();
         addTearDown(store.dispose);
         await store.openSecureSession('Owner');
+        await store.dismissTutorial();
         await tester.pumpWidget(SariScanApp(store: store));
         await tester.pumpAndSettle();
         if (fromSearch) {

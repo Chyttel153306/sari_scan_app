@@ -1,3 +1,5 @@
+import '../utils/money.dart';
+
 enum PaymentType { cash, utang }
 
 enum LedgerEntryType { credit, payment }
@@ -67,7 +69,7 @@ class CartLine {
   final Product product;
   final int quantity;
 
-  double get subtotal => product.price * quantity;
+  double get subtotal => roundMoney(product.price * quantity);
 }
 
 class SaleItem {
@@ -141,10 +143,12 @@ class Customer {
   String phone;
   final List<LedgerEntry> ledger;
 
-  double get balance => ledger.fold(
-    0,
-    (total, entry) =>
-        total +
-        (entry.type == LedgerEntryType.credit ? entry.amount : -entry.amount),
+  double get balance => roundMoney(
+    ledger.fold<double>(
+      0,
+      (total, entry) =>
+          total +
+          (entry.type == LedgerEntryType.credit ? entry.amount : -entry.amount),
+    ),
   );
 }

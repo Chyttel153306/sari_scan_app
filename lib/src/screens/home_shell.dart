@@ -1,3 +1,4 @@
+import '../l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 
 import '../store/app_store.dart';
@@ -7,6 +8,7 @@ import 'pos_screen.dart';
 import 'products_screen.dart';
 import 'reports_screen.dart';
 import 'settings_screen.dart';
+import '../widgets/guided_tutorial.dart';
 import 'utang_screen.dart';
 
 class HomeShell extends StatefulWidget {
@@ -22,19 +24,86 @@ class _HomeShellState extends State<HomeShell> {
   int _index = 0;
   final Set<int> _visitedTabs = {0};
 
+  final _posTarget = GlobalKey();
+  final _productsTarget = GlobalKey();
+  final _addTarget = GlobalKey();
+  final _scanTarget = GlobalKey();
+  final _utangTarget = GlobalKey();
+  final _reportsTarget = GlobalKey();
+  final _accountTarget = GlobalKey();
+  bool _tourOpen = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && widget.store.needsFirstUseTutorial) _openTutorial();
+    });
+  }
+
+  Future<void> _openTutorial() async {
+    if (_tourOpen) return;
+    _tourOpen = true;
+    final previousTab = _index;
+    void showStep(int step) {
+      final tab = step <= 1
+          ? 1
+          : step <= 4
+          ? 0
+          : step == 5
+          ? 2
+          : step == 6
+          ? 3
+          : 0;
+      setState(() {
+        _index = tab;
+        _visitedTabs.add(tab);
+      });
+    }
+
+    showStep(0);
+    await showGeneralDialog<void>(
+      context: context,
+      barrierLabel: context.tr("App tutorial"),
+      barrierColor: Colors.transparent,
+      transitionDuration: const Duration(milliseconds: 220),
+      pageBuilder: (context, _, _) => GuidedTutorial(
+        targets: [
+          _productsTarget,
+          _addTarget,
+          _posTarget,
+          _scanTarget,
+          _posTarget,
+          _utangTarget,
+          _reportsTarget,
+          _accountTarget,
+        ],
+        onStepChanged: showStep,
+      ),
+      transitionBuilder: (context, animation, _, child) =>
+          FadeTransition(opacity: animation, child: child),
+    );
+    if (!mounted) return;
+    setState(() {
+      _tourOpen = false;
+      _index = previousTab;
+    });
+    await widget.store.dismissTutorial();
+  }
+
   void _openMore() {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
       builder: (context) => SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'Store account',
+                context.tr("Store account"),
                 style: Theme.of(
                   context,
                 ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
@@ -45,8 +114,10 @@ class _HomeShellState extends State<HomeShell> {
                 leading: const CircleAvatar(
                   child: Icon(Icons.person_outline_rounded),
                 ),
-                title: Text(widget.store.currentUserName ?? 'Store Owner'),
-                subtitle: const Text('Protected by phone security'),
+                title: Text(
+                  widget.store.currentUserName ?? context.tr("Store Owner"),
+                ),
+                subtitle: Text(context.tr("Protected by phone security")),
               ),
               ListTile(
                 contentPadding: EdgeInsets.zero,
@@ -60,12 +131,14 @@ class _HomeShellState extends State<HomeShell> {
                 ),
                 title: Text(
                   widget.store.storageError == null
-                      ? 'Saved on this phone'
-                      : 'Phone storage needs attention',
+                      ? context.tr("Saved on this phone")
+                      : context.tr("Phone storage needs attention"),
                 ),
                 subtitle: Text(
                   widget.store.storageError ??
-                      'Products, customers, sales, and utang work offline.',
+                      context.tr(
+                        "Products, customers, sales, and utang work offline.",
+                      ),
                 ),
               ),
               ListTile(
@@ -74,27 +147,48 @@ class _HomeShellState extends State<HomeShell> {
                   Icons.settings_outlined,
                   color: Theme.of(context).colorScheme.primary,
                 ),
-                title: const Text('Settings'),
-                subtitle: const Text('Pricing markup, store name, and more'),
+                title: Text(context.tr("Settings")),
+                subtitle: Text(
+                  context.tr("Pricing markup, store name, and more"),
+                ),
                 trailing: const Icon(Icons.chevron_right_rounded),
                 onTap: () {
                   Navigator.pop(context);
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => SettingsScreen(store: widget.store),
+                      builder: (_) => SettingsScreen(
+                        store: widget.store,
+                        onStartTutorial: () {
+                          Navigator.pop(this.context);
+                          _openTutorial();
+                        },
+                      ),
                     ),
                   );
                 },
               ),
               const SizedBox(height: 8),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.school_outlined),
+                title: Text(context.tr("App tutorial")),
+                subtitle: Text(
+                  context.tr("Learn products, sales, utang, and more"),
+                ),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () {
+                  Navigator.pop(context);
+                  _openTutorial();
+                },
+              ),
               OutlinedButton.icon(
                 onPressed: () {
                   Navigator.pop(context);
                   widget.store.logout();
                 },
                 icon: const Icon(Icons.logout_rounded),
-                label: const Text('Log out'),
+                label: Text(context.tr("Log out")),
               ),
             ],
           ),
@@ -106,8 +200,8 @@ class _HomeShellState extends State<HomeShell> {
   @override
   Widget build(BuildContext context) {
     final screens = [
-      PosScreen(store: widget.store),
-      ProductsScreen(store: widget.store),
+      PosScreen(store: widget.store, scanTutorialKey: _scanTarget),
+      ProductsScreen(store: widget.store, addTutorialKey: _addTarget),
       UtangScreen(store: widget.store),
       ReportsScreen(store: widget.store),
     ];
@@ -126,9 +220,9 @@ class _HomeShellState extends State<HomeShell> {
             Text(
               [
                 'Tindahan POS',
-                'Inventory',
-                'Utang Book',
-                'Sales & Analytics',
+                context.tr("Inventory"),
+                context.tr("Utang Book"),
+                context.tr("Sales & Analytics"),
               ][_index],
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -136,12 +230,15 @@ class _HomeShellState extends State<HomeShell> {
             ),
             Text(
               _index == 0
-                  ? '${widget.store.currentUserName ?? 'Your'}’s store'
+                  ? context.tr(
+                      "{0}’s store",
+                      args: [widget.store.currentUserName ?? 'Your'],
+                    )
                   : [
-                      'Your store, at a glance',
-                      'Products & stock',
-                      'Customer balances',
-                      'Your business in numbers',
+                      context.tr("Your store, at a glance"),
+                      context.tr("Products & stock"),
+                      context.tr("Customer balances"),
+                      context.tr("Your business in numbers"),
                     ][_index],
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -155,7 +252,13 @@ class _HomeShellState extends State<HomeShell> {
         ),
         actions: [
           IconButton(
-            tooltip: 'Store account',
+            tooltip: context.tr("App tutorial"),
+            onPressed: _openTutorial,
+            icon: const Icon(Icons.help_outline_rounded),
+          ),
+          IconButton(
+            key: _accountTarget,
+            tooltip: context.tr("Store account"),
             onPressed: _openMore,
             icon: const Icon(Icons.account_circle_outlined),
           ),
@@ -200,31 +303,35 @@ class _HomeShellState extends State<HomeShell> {
               });
             }
           },
-          destinations: const [
+          destinations: [
             NavigationDestination(
-              icon: Icon(Icons.point_of_sale_outlined),
+              key: _posTarget,
+              icon: const Icon(Icons.point_of_sale_outlined),
               selectedIcon: Icon(Icons.point_of_sale),
               label: 'POS',
             ),
             NavigationDestination(
-              icon: Icon(Icons.inventory_2_outlined),
+              key: _productsTarget,
+              icon: const Icon(Icons.inventory_2_outlined),
               selectedIcon: Icon(Icons.inventory_2),
-              label: 'Products',
+              label: context.tr("Products"),
             ),
             NavigationDestination(
-              icon: Icon(Icons.menu_book_outlined),
+              key: _utangTarget,
+              icon: const Icon(Icons.menu_book_outlined),
               selectedIcon: Icon(Icons.menu_book),
               label: 'Utang',
             ),
             NavigationDestination(
-              icon: Icon(Icons.bar_chart_outlined),
+              key: _reportsTarget,
+              icon: const Icon(Icons.bar_chart_outlined),
               selectedIcon: Icon(Icons.bar_chart),
-              label: 'Reports',
+              label: context.tr("Reports"),
             ),
             NavigationDestination(
               icon: Icon(Icons.more_horiz_rounded),
               selectedIcon: Icon(Icons.more_horiz_rounded),
-              label: 'More',
+              label: context.tr("More"),
             ),
           ],
         ),

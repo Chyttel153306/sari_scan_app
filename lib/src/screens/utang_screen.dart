@@ -1,3 +1,4 @@
+import '../l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -85,23 +86,28 @@ class _UtangScreenState extends State<UtangScreen> {
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
               children: [
                 MetricHero(
-                  label: 'Total outstanding balance',
+                  label: context.tr("Total outstanding balance"),
                   amount: money(widget.store.totalOutstanding),
                   icon: Icons.menu_book_outlined,
                   footer: Wrap(
                     spacing: 14,
                     runSpacing: 8,
                     children: [
-                      Text('$pending active debts'),
-                      Text('${money(collected)} collected this week'),
+                      Text(context.tr("{0} active debts", args: [pending])),
+                      Text(
+                        context.tr(
+                          "{0} collected this week",
+                          args: [money(collected)],
+                        ),
+                      ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 22),
                 TextField(
                   onChanged: (value) => setState(() => _query = value),
-                  decoration: const InputDecoration(
-                    hintText: 'Search customer name or phone...',
+                  decoration: InputDecoration(
+                    hintText: context.tr("Search customer name or phone..."),
                     prefixIcon: Icon(Icons.search, size: 20),
                   ),
                 ),
@@ -113,8 +119,11 @@ class _UtangScreenState extends State<UtangScreen> {
                         (filter) => ChoiceChip(
                           label: Text(
                             filter == 'All'
-                                ? 'All (${widget.store.customers.length})'
-                                : filter,
+                                ? context.tr(
+                                    "All ({0})",
+                                    args: [widget.store.customers.length],
+                                  )
+                                : context.tr(filter),
                           ),
                           selected: _filter == filter,
                           showCheckmark: false,
@@ -131,15 +140,17 @@ class _UtangScreenState extends State<UtangScreen> {
                       .toList(),
                 ),
                 const SizedBox(height: 20),
-                const SectionHeading(
-                  'Customer records',
-                  subtitle: 'Highest balance first',
+                SectionHeading(
+                  context.tr("Customer records"),
+                  subtitle: context.tr("Highest balance first"),
                 ),
                 const SizedBox(height: 12),
                 if (customers.isEmpty)
-                  const EmptyState(
-                    title: 'No customers found.',
-                    message: 'Add a customer or choose another filter.',
+                  EmptyState(
+                    title: context.tr("No customers found."),
+                    message: context.tr(
+                      "Add a customer or choose another filter.",
+                    ),
                     icon: Icons.people_outline,
                   ),
                 ...customers.map(
@@ -211,7 +222,10 @@ class _UtangScreenState extends State<UtangScreen> {
                                     Text(
                                       customer.phone.isNotEmpty
                                           ? customer.phone
-                                          : '${customer.ledger.length} ledger entries',
+                                          : context.tr(
+                                              "{0} ledger entries",
+                                              args: [customer.ledger.length],
+                                            ),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
@@ -238,7 +252,9 @@ class _UtangScreenState extends State<UtangScreen> {
                                     ),
                                     const SizedBox(height: 5),
                                     StatusPill(
-                                      customer.balance > 0 ? 'Pending' : 'Paid',
+                                      customer.balance > 0
+                                          ? context.tr("Pending")
+                                          : context.tr("Paid"),
                                       color: customer.balance > 0
                                           ? AppTheme.of(context).warn
                                           : AppTheme.of(context).emerald,
@@ -263,7 +279,7 @@ class _UtangScreenState extends State<UtangScreen> {
               bottom: 16,
               child: FloatingActionButton(
                 heroTag: 'addCustomer',
-                tooltip: 'Add customer',
+                tooltip: context.tr("Add customer"),
                 onPressed: _addCustomer,
                 child: const Icon(Icons.person_add_alt_1),
               ),
@@ -288,17 +304,20 @@ class CustomerLedgerScreen extends StatelessWidget {
   Future<void> _recordPayment(BuildContext context) async {
     final controller = TextEditingController();
     String? error;
+    bool submitted = false;
     final route = DialogRoute<void>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
           scrollable: true,
-          title: const Text('Record payment'),
+          title: Text(context.tr("Record payment")),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Outstanding: ${money(customer.balance)}'),
+              Text(
+                context.tr("Outstanding: {0}", args: [money(customer.balance)]),
+              ),
               const SizedBox(height: 12),
               TextField(
                 controller: controller,
@@ -309,15 +328,15 @@ class CustomerLedgerScreen extends StatelessWidget {
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
                 ],
-                decoration: const InputDecoration(
-                  labelText: 'Payment amount',
+                decoration: InputDecoration(
+                  labelText: context.tr("Payment amount"),
                   prefixText: '₱ ',
                 ),
               ),
               if (error != null) ...[
                 const SizedBox(height: 10),
                 Text(
-                  error!,
+                  context.tr(error!),
                   style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
               ],
@@ -326,19 +345,31 @@ class CustomerLedgerScreen extends StatelessWidget {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
+              child: Text(context.tr("Cancel")),
             ),
             FilledButton(
-              onPressed: () {
-                final amount = double.tryParse(controller.text) ?? 0;
-                final result = store.recordPayment(customer, amount);
-                if (result == null) {
-                  Navigator.pop(dialogContext);
-                } else {
-                  setState(() => error = result);
-                }
-              },
-              child: const Text('Save payment'),
+              onPressed: submitted
+                  ? null
+                  : () async {
+                      if (submitted) return;
+                      setState(() => submitted = true);
+                      final amount = double.tryParse(controller.text) ?? 0;
+                      final result = await store.recordPaymentAndSave(
+                        customer,
+                        amount,
+                      );
+                      if (!dialogContext.mounted) return;
+                      if (result == null) {
+                        submitted = true;
+                        Navigator.pop(dialogContext);
+                      } else {
+                        setState(() {
+                          submitted = false;
+                          error = result;
+                        });
+                      }
+                    },
+              child: Text(context.tr("Save payment")),
             ),
           ],
         ),
@@ -359,7 +390,7 @@ class CustomerLedgerScreen extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           children: [
             MetricHero(
-              label: 'Customer balance',
+              label: context.tr("Customer balance"),
               amount: money(customer.balance),
               footer: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -377,24 +408,26 @@ class CustomerLedgerScreen extends StatelessWidget {
                         ? () => _recordPayment(context)
                         : null,
                     icon: const Icon(Icons.payments_outlined),
-                    label: const Text('Pay Utang'),
+                    label: Text(context.tr("Pay Utang")),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 18),
             Text(
-              'Transaction History',
+              context.tr("Transaction History"),
               style: Theme.of(
                 context,
               ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
             if (customer.ledger.isEmpty)
-              const Padding(
+              Padding(
                 padding: EdgeInsets.symmetric(vertical: 40),
                 child: Center(
-                  child: Text('No credit purchases or payments yet.'),
+                  child: Text(
+                    context.tr("No credit purchases or payments yet."),
+                  ),
                 ),
               )
             else

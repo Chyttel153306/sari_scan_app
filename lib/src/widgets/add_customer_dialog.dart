@@ -1,3 +1,4 @@
+import '../l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 
 import '../models/models.dart';
@@ -35,7 +36,7 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
   @override
   Widget build(BuildContext context) => AlertDialog(
     scrollable: true,
-    title: const Text('Add customer'),
+    title: Text(context.tr("Add customer")),
     content: Form(
       key: _formKey,
       child: Column(
@@ -46,9 +47,9 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
             autofocus: true,
             textCapitalization: TextCapitalization.words,
             textInputAction: TextInputAction.next,
-            decoration: const InputDecoration(labelText: 'Customer name'),
+            decoration: InputDecoration(labelText: context.tr("Customer name")),
             validator: (value) => value == null || value.trim().isEmpty
-                ? 'Enter a customer name.'
+                ? context.tr('Enter a customer name.')
                 : null,
           ),
           const SizedBox(height: 12),
@@ -57,7 +58,9 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
             keyboardType: TextInputType.phone,
             textInputAction: TextInputAction.done,
             onFieldSubmitted: (_) => _submit(),
-            decoration: const InputDecoration(labelText: 'Phone (optional)'),
+            decoration: InputDecoration(
+              labelText: context.tr("Phone (optional)"),
+            ),
           ),
         ],
       ),
@@ -65,9 +68,9 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
     actions: [
       TextButton(
         onPressed: () => Navigator.pop(context),
-        child: const Text('Cancel'),
+        child: Text(context.tr("Cancel")),
       ),
-      FilledButton(onPressed: _submit, child: const Text('Add customer')),
+      FilledButton(onPressed: _submit, child: Text(context.tr("Add customer"))),
     ],
   );
 }

@@ -1,0 +1,9 @@
+﻿[
+  {"name":"format_final","exitCode":1,"reason":"Pre-existing formatting in lib/main.dart and ignored build/ui_preview_test.dart; --output=none did not change them"},
+  {"name":"analyze_final","exitCode":0,"result":"No issues found"},
+  {"name":"test_final","exitCode":0,"tests":125,"result":"All tests passed"},
+  {"name":"apk_final","exitCode":0,"artifact":"build/app/outputs/flutter-apk/app-release.apk","reportedSizeMB":105.4},
+  {"name":"signature_final","exitCode":0,"scheme":"v2","certificate":"C=US, O=Android, CN=Android Debug"},
+  {"name":"format_modified","exitCode":0,"dartFiles":16,"changed":0},
+  {"name":"diff_check","exitCode":0}
+]

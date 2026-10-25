@@ -1,3 +1,4 @@
+import '../l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 
 import '../services/phone_security_service.dart';
@@ -33,6 +34,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _submit() async {
+    if (_submitting) return;
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
     final nameError = widget.store.validateOwnerName(_nameController.text);
@@ -72,11 +74,16 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _forgotName() async {
-    setState(() => _error = null);
+    if (_submitting) return;
+    setState(() {
+      _submitting = true;
+      _error = null;
+    });
 
     final result = await widget.phoneSecurity.authenticate();
 
     if (!mounted) return;
+    setState(() => _submitting = false);
 
     if (!result.authenticated) {
       setState(() => _error = result.message);
@@ -88,18 +95,21 @@ class _LoginScreenState extends State<LoginScreen> {
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Registered Store Name'),
+        title: Text(context.tr("Registered Store Name")),
         content: Text(
           name.isEmpty
-              ? "Register your Store's name."
-              : 'Your store is registered as "$name".',
+              ? context.tr("Register your Store's name.")
+              : context.tr(
+                  "Your store is registered as \"{0}\".",
+                  args: [name],
+                ),
         ),
         actions: [
           FilledButton(
             onPressed: () {
               Navigator.of(dialogContext).pop();
             },
-            child: const Text('Got it'),
+            child: Text(context.tr("Got it")),
           ),
         ],
       ),
@@ -113,11 +123,16 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _changeName() async {
-    setState(() => _error = null);
+    if (_submitting) return;
+    setState(() {
+      _submitting = true;
+      _error = null;
+    });
 
     final result = await widget.phoneSecurity.authenticate();
 
     if (!mounted) return;
+    setState(() => _submitting = false);
 
     if (!result.authenticated) {
       setState(() => _error = result.message);
@@ -150,7 +165,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('Store name updated.')));
+    ).showSnackBar(SnackBar(content: Text(context.tr("Store name updated."))));
   }
 
   @override
@@ -185,7 +200,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      'Scan. Sell. Track',
+                      context.tr("Scan. Sell. Track"),
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 13,
@@ -203,8 +218,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              const Text(
-                                'Welcome back! ',
+                              Text(
+                                context.tr("Welcome back! "),
                                 style: TextStyle(
                                   fontSize: 22.5,
                                   fontWeight: FontWeight.w800,
@@ -213,7 +228,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                               const SizedBox(height: 6),
                               Text(
-                                "Let's get your store set up!.",
+                                context.tr("Let's get your store set up!."),
                                 style: TextStyle(
                                   color: AppTheme.of(context).muted,
                                   fontSize: 15,
@@ -226,9 +241,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                 textInputAction: TextInputAction.done,
                                 onFieldSubmitted: (_) =>
                                     _submitting ? null : _submit(),
-                                decoration: const InputDecoration(
-                                  labelText: 'Store Name',
-                                  hintText: 'Example: Aaron Store',
+                                decoration: InputDecoration(
+                                  labelText: context.tr("Store Name"),
+                                  hintText: context.tr("Example: Aaron Store"),
                                   prefixIcon: Icon(
                                     Icons.person_outline,
                                     size: 20,
@@ -236,7 +251,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                                 validator: (value) =>
                                     value == null || value.trim().isEmpty
-                                    ? 'Enter your name.'
+                                    ? context.tr('Enter your name.')
                                     : null,
                               ),
                               const SizedBox(height: 18),
@@ -257,7 +272,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                     SizedBox(width: 10),
                                     Expanded(
                                       child: Text(
-                                        "To secure your access, you will be asked to use your phone's security feature (fingerprint, face scan, PIN, pattern, or password).",
+                                        context.tr(
+                                          "To secure your access, you will be asked to use your phone's security feature (fingerprint, face scan, PIN, pattern, or password).",
+                                        ),
                                         style: TextStyle(
                                           fontSize: 13.75,
                                           height: 1.65,
@@ -272,7 +289,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 Padding(
                                   padding: const EdgeInsets.only(top: 14),
                                   child: Text(
-                                    _error!,
+                                    context.tr(_error!),
                                     style: TextStyle(
                                       color: Theme.of(
                                         context,
@@ -295,8 +312,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                     : const Icon(Icons.fingerprint, size: 20),
                                 label: Text(
                                   _submitting
-                                      ? 'Checking phone security...'
-                                      : 'Continue with Phone Security',
+                                      ? context.tr("Checking phone security...")
+                                      : context.tr(
+                                          "Continue with Phone Security",
+                                        ),
                                   textAlign: TextAlign.center,
                                 ),
                               ),
@@ -309,7 +328,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                       onPressed: _submitting
                                           ? null
                                           : _forgotName,
-                                      child: const Text('Forgot name?'),
+                                      child: Text(context.tr("Forgot name?")),
                                     ),
                                     Text(
                                       '•',
@@ -321,7 +340,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                       onPressed: _submitting
                                           ? null
                                           : _changeName,
-                                      child: const Text('Change name'),
+                                      child: Text(context.tr("Change name")),
                                     ),
                                   ],
                                 ),
@@ -340,7 +359,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 8),
                     Text(
                       widget.store.storageError ??
-                          'Offline mode: all stored data stays on this phone.',
+                          context.tr(
+                            "Offline mode: all stored data stays on this phone.",
+                          ),
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
@@ -404,17 +425,17 @@ class _ChangeNameDialogState extends State<ChangeNameDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       scrollable: true,
-      title: const Text('Change store name'),
+      title: Text(context.tr("Change store name")),
       content: Form(
         key: _formKey,
         child: TextFormField(
           controller: _controller,
           textCapitalization: TextCapitalization.words,
           textInputAction: TextInputAction.done,
-          decoration: const InputDecoration(labelText: 'New store name'),
+          decoration: InputDecoration(labelText: context.tr("New store name")),
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
-              return 'Enter a store name.';
+              return context.tr('Enter a store name.');
             }
 
             return null;
@@ -423,8 +444,8 @@ class _ChangeNameDialogState extends State<ChangeNameDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: _cancel, child: const Text('Cancel')),
-        FilledButton(onPressed: _save, child: const Text('Save')),
+        TextButton(onPressed: _cancel, child: Text(context.tr("Cancel"))),
+        FilledButton(onPressed: _save, child: Text(context.tr("Save"))),
       ],
     );
   }

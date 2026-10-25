@@ -1,3 +1,4 @@
+import '../l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -24,6 +25,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   PaymentType _paymentType = PaymentType.cash;
   Customer? _customer;
   String? _error;
+  bool _completing = false;
 
   double get _cash => double.tryParse(_cashController.text) ?? 0;
 
@@ -33,20 +35,32 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     super.dispose();
   }
 
-  void _complete() {
-    setState(() => _error = null);
+  Future<void> _complete() async {
+    if (_completing) return;
+    setState(() {
+      _completing = true;
+      _error = null;
+    });
     try {
-      final sale = widget.store.completeSale(
+      final sale = await widget.store.completeSaleAndSave(
         paymentType: _paymentType,
         amountReceived: _cash,
         customer: _paymentType == PaymentType.utang ? _customer : null,
       );
+      if (!mounted) return;
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => ReceiptScreen(sale: sale)),
       );
     } on StateError catch (error) {
-      setState(() => _error = error.message.toString());
+      if (!mounted) return;
+      setState(() {
+        _completing = false;
+        _error = error.message.toString();
+      });
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(context.tr(_error!))));
     }
   }
 
@@ -76,322 +90,340 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         (_paymentType == PaymentType.cash
             ? _cash.isFinite && _cash >= total
             : _customer != null);
-    return Scaffold(
-      appBar: AppBar(title: const Text('Checkout')),
-      bottomNavigationBar: Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.viewInsetsOf(context).bottom,
-        ),
-        child: SafeArea(
-          top: false,
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-            decoration: BoxDecoration(
-              color: AppTheme.of(context).base,
-              border: Border(
-                top: BorderSide(color: AppTheme.of(context).border),
+    return PopScope(
+      canPop: !_completing,
+      child: Scaffold(
+        appBar: AppBar(title: Text(context.tr("Checkout"))),
+        bottomNavigationBar: Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.viewInsetsOf(context).bottom,
+          ),
+          child: SafeArea(
+            top: false,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              decoration: BoxDecoration(
+                color: AppTheme.of(context).base,
+                border: Border(
+                  top: BorderSide(color: AppTheme.of(context).border),
+                ),
               ),
-            ),
-            child: FilledButton.icon(
-              onPressed: canComplete ? _complete : null,
-              iconAlignment: IconAlignment.end,
-              icon: const Icon(Icons.arrow_forward, size: 20),
-              label: const Text('Complete sale'),
+              child: FilledButton.icon(
+                onPressed: canComplete && !_completing ? _complete : null,
+                iconAlignment: IconAlignment.end,
+                icon: const Icon(Icons.arrow_forward, size: 20),
+                label: Text(
+                  context.tr(_completing ? "Saving..." : "Complete sale"),
+                ),
+              ),
             ),
           ),
         ),
-      ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 640),
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-            children: [
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(18),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      SectionHeading(
-                        'Order summary',
-                        trailing: StatusPill(
-                          '${widget.store.cartItemCount} items',
-                          color: AppTheme.of(context).muted,
-                          background: AppTheme.of(context).canvas,
+        body: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 640),
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+              children: [
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        SectionHeading(
+                          context.tr("Order summary"),
+                          trailing: StatusPill(
+                            context.tr(
+                              "{0} items",
+                              args: [widget.store.cartItemCount],
+                            ),
+                            color: AppTheme.of(context).muted,
+                            background: AppTheme.of(context).canvas,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 18),
-                      ...widget.store.cartLines.map(
-                        (line) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 30,
-                                height: 30,
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(
-                                  color: AppTheme.of(context).canvas,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: AppTheme.of(context).border,
+                        const SizedBox(height: 18),
+                        ...widget.store.cartLines.map(
+                          (line) => Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 30,
+                                  height: 30,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.of(context).canvas,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: AppTheme.of(context).border,
+                                    ),
                                   ),
-                                ),
-                                child: Text(
-                                  '${line.quantity}',
-                                  style: const TextStyle(
-                                    fontFamily: 'SpaceGrotesk',
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  line.product.name,
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Flexible(
-                                child: Align(
-                                  alignment: Alignment.centerRight,
-                                  child: PriceText(
-                                    money(line.subtotal),
+                                  child: Text(
+                                    '${line.quantity}',
                                     style: const TextStyle(
                                       fontFamily: 'SpaceGrotesk',
                                       fontWeight: FontWeight.w700,
                                     ),
                                   ),
                                 ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    line.product.name,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Flexible(
+                                  child: Align(
+                                    alignment: Alignment.centerRight,
+                                    child: PriceText(
+                                      money(line.subtotal),
+                                      style: const TextStyle(
+                                        fontFamily: 'SpaceGrotesk',
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: AppTheme.of(context).mint,
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text(
+                                context.tr("TOTAL AMOUNT TO PAY"),
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  letterSpacing: .8,
+                                  color: AppTheme.of(context).emeraldDeep,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              PriceText(
+                                money(total),
+                                style: TextStyle(
+                                  fontFamily: 'SpaceGrotesk',
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppTheme.of(context).emeraldDeep,
+                                ),
                               ),
                             ],
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 14),
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppTheme.of(context).mint,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Text(
-                              'TOTAL AMOUNT TO PAY',
-                              style: TextStyle(
-                                fontSize: 10,
-                                letterSpacing: .8,
-                                color: AppTheme.of(context).emeraldDeep,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            PriceText(
-                              money(total),
-                              style: TextStyle(
-                                fontFamily: 'SpaceGrotesk',
-                                fontSize: 32,
-                                fontWeight: FontWeight.w700,
-                                color: AppTheme.of(context).emeraldDeep,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 24),
-              const SectionHeading(
-                'Payment method',
-                subtitle: 'Choose how this order will be paid',
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _PaymentOption(
-                      label: 'Cash',
-                      subtitle: 'Immediate payment',
-                      icon: Icons.payments_outlined,
-                      selected: _paymentType == PaymentType.cash,
-                      onTap: () => _selectPayment(PaymentType.cash),
+                const SizedBox(height: 24),
+                SectionHeading(
+                  context.tr("Payment method"),
+                  subtitle: context.tr("Choose how this order will be paid"),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _PaymentOption(
+                        label: context.tr("Cash"),
+                        subtitle: context.tr('Immediate payment'),
+                        icon: Icons.payments_outlined,
+                        selected: _paymentType == PaymentType.cash,
+                        onTap: () => _selectPayment(PaymentType.cash),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _PaymentOption(
-                      label: 'Utang',
-                      subtitle: 'Store credit',
-                      icon: Icons.menu_book_outlined,
-                      selected: _paymentType == PaymentType.utang,
-                      onTap: () => _selectPayment(PaymentType.utang),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _PaymentOption(
+                        label: 'Utang',
+                        subtitle: context.tr('Store credit'),
+                        icon: Icons.menu_book_outlined,
+                        selected: _paymentType == PaymentType.utang,
+                        onTap: () => _selectPayment(PaymentType.utang),
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              if (_paymentType == PaymentType.cash)
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(18),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        TextField(
-                          controller: _cashController,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                          textInputAction: TextInputAction.done,
-                          onEditingComplete: () =>
-                              FocusScope.of(context).unfocus(),
-                          inputFormatters: [
-                            FilteringTextInputFormatter.allow(
-                              RegExp(r'^\d*\.?\d{0,2}'),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                if (_paymentType == PaymentType.cash)
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(18),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          TextField(
+                            controller: _cashController,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
                             ),
-                          ],
-                          decoration: const InputDecoration(
-                            labelText: 'Cash received',
-                            prefixText: '₱ ',
-                            prefixIcon: Icon(Icons.payments_outlined),
-                          ),
-                          onChanged: (_) => setState(() => _error = null),
-                        ),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 4,
-                          children: [
-                            ActionChip(
-                              label: const Text('Exact'),
-                              labelStyle: TextStyle(
-                                color: AppTheme.of(context).ink,
+                            textInputAction: TextInputAction.done,
+                            onEditingComplete: () =>
+                                FocusScope.of(context).unfocus(),
+                            inputFormatters: [
+                              FilteringTextInputFormatter.allow(
+                                RegExp(r'^\d*\.?\d{0,2}'),
                               ),
-                              onPressed: () => setState(
-                                () => _cashController.text = total
-                                    .toStringAsFixed(2),
-                              ),
+                            ],
+                            decoration: InputDecoration(
+                              labelText: context.tr("Cash received"),
+                              prefixText: '₱ ',
+                              prefixIcon: Icon(Icons.payments_outlined),
                             ),
-                            ...[100.0, 500.0, 1000.0]
-                                .where((value) => value > total)
+                            onChanged: (_) => setState(() => _error = null),
+                          ),
+                          const SizedBox(height: 12),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 4,
+                            children: [
+                              ActionChip(
+                                label: Text(context.tr("Exact")),
+                                labelStyle: TextStyle(
+                                  color: AppTheme.of(context).ink,
+                                ),
+                                onPressed: () => setState(
+                                  () => _cashController.text = total
+                                      .toStringAsFixed(2),
+                                ),
+                              ),
+                              ...[100.0, 500.0, 1000.0]
+                                  .where((value) => value > total)
+                                  .map(
+                                    (value) => ActionChip(
+                                      label: Text(money(value)),
+                                      labelStyle: TextStyle(
+                                        color: AppTheme.of(context).ink,
+                                      ),
+                                      onPressed: () => setState(
+                                        () => _cashController.text = value
+                                            .toStringAsFixed(2),
+                                      ),
+                                    ),
+                                  ),
+                            ],
+                          ),
+                          const Divider(),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  change >= 0
+                                      ? context.tr("Change")
+                                      : context.tr("Amount still due"),
+                                  style: TextStyle(
+                                    color: AppTheme.of(context).muted,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Flexible(
+                                child: PriceText(
+                                  money(change.abs()),
+                                  style: TextStyle(
+                                    fontFamily: 'SpaceGrotesk',
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w700,
+                                    color: change >= 0
+                                        ? AppTheme.of(context).emerald
+                                        : Theme.of(context).colorScheme.error,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(18),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          SectionHeading(
+                            context.tr("Select customer for utang"),
+                            subtitle: context.tr(
+                              "The full amount goes to their ledger",
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          DropdownButtonFormField<Customer>(
+                            key: ValueKey(_customer?.id),
+                            initialValue: _customer,
+                            isExpanded: true,
+                            hint: Text(
+                              widget.store.customers.isEmpty
+                                  ? context.tr("Add your first customer below")
+                                  : context.tr("Select a customer"),
+                            ),
+                            decoration: InputDecoration(
+                              labelText: context.tr("Customer"),
+                              prefixIcon: Icon(Icons.person_outline),
+                            ),
+                            items: widget.store.customers
                                 .map(
-                                  (value) => ActionChip(
-                                    label: Text(money(value)),
-                                    labelStyle: TextStyle(
-                                      color: AppTheme.of(context).ink,
-                                    ),
-                                    onPressed: () => setState(
-                                      () => _cashController.text = value
-                                          .toStringAsFixed(2),
+                                  (customer) => DropdownMenuItem(
+                                    value: customer,
+                                    child: Text(
+                                      context.tr(
+                                        "{0} • {1} balance",
+                                        args: [
+                                          customer.name,
+                                          money(customer.balance),
+                                        ],
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 12),
                                     ),
                                   ),
-                                ),
-                          ],
-                        ),
-                        const Divider(),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                change >= 0 ? 'Change' : 'Amount still due',
-                                style: TextStyle(
-                                  color: AppTheme.of(context).muted,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Flexible(
-                              child: PriceText(
-                                money(change.abs()),
-                                style: TextStyle(
-                                  fontFamily: 'SpaceGrotesk',
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.w700,
-                                  color: change >= 0
-                                      ? AppTheme.of(context).emerald
-                                      : Theme.of(context).colorScheme.error,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              else
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(18),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const SectionHeading(
-                          'Select customer for utang',
-                          subtitle: 'The full amount goes to their ledger',
-                        ),
-                        const SizedBox(height: 16),
-                        DropdownButtonFormField<Customer>(
-                          key: ValueKey(_customer?.id),
-                          initialValue: _customer,
-                          isExpanded: true,
-                          hint: Text(
-                            widget.store.customers.isEmpty
-                                ? 'Add your first customer below'
-                                : 'Select a customer',
+                                )
+                                .toList(),
+                            onChanged: (value) => setState(() {
+                              _customer = value;
+                              _error = null;
+                            }),
                           ),
-                          decoration: const InputDecoration(
-                            labelText: 'Customer',
-                            prefixIcon: Icon(Icons.person_outline),
+                          const SizedBox(height: 10),
+                          TextButton.icon(
+                            onPressed: _addCustomer,
+                            icon: const Icon(Icons.person_add_alt_1, size: 20),
+                            label: Text(context.tr("Add customer")),
                           ),
-                          items: widget.store.customers
-                              .map(
-                                (customer) => DropdownMenuItem(
-                                  value: customer,
-                                  child: Text(
-                                    '${customer.name} • ${money(customer.balance)} balance',
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) => setState(() {
-                            _customer = value;
-                            _error = null;
-                          }),
-                        ),
-                        const SizedBox(height: 10),
-                        TextButton.icon(
-                          onPressed: _addCustomer,
-                          icon: const Icon(Icons.person_add_alt_1, size: 20),
-                          label: const Text('Add customer'),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: Text(
-                    _error!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
+                if (_error != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Text(
+                      context.tr(_error!),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

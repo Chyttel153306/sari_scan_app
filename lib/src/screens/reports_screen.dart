@@ -1,3 +1,4 @@
+import '../l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 
 import '../models/models.dart';
@@ -99,7 +100,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
-                              _label(period),
+                              context.tr(_label(period)),
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 fontSize: 11,
@@ -120,7 +121,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             ),
             const SizedBox(height: 18),
             MetricHero(
-              label: 'Total sales',
+              label: context.tr("Total sales"),
               amount: money(total),
               icon: Icons.trending_up,
               footer: Row(
@@ -129,10 +130,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Transactions'),
+                        Text(context.tr("Transactions")),
                         const SizedBox(height: 4),
                         Text(
-                          '${sales.length} orders',
+                          context.tr("{0} orders", args: [sales.length]),
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.w700,
@@ -147,7 +148,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Average basket'),
+                        Text(context.tr("Average basket")),
                         const SizedBox(height: 4),
                         PriceText(
                           money(sales.isEmpty ? 0 : total / sales.length),
@@ -175,7 +176,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Net Profit',
+                            context.tr("Net Profit"),
                             style: Theme.of(context).textTheme.titleMedium,
                           ),
                           const SizedBox(height: 4),
@@ -190,10 +191,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     Flexible(
                       child: Text(
                         sales.isEmpty
-                            ? 'No sales yet'
+                            ? context.tr("No sales yet")
                             : hasUnknownCosts
-                            ? 'Cost price is unavailable for older sales'
-                            : 'Based on saved cost prices',
+                            ? context.tr(
+                                "Cost price is unavailable for older sales",
+                              )
+                            : context.tr("Based on saved cost prices"),
                         textAlign: TextAlign.right,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -212,22 +215,31 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Sales Trend',
+                      context.tr("Sales Trend"),
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${shortDateTime(reportStart(_period, now)).split(' ').first} to '
-                      '${shortDateTime(now).split(' ').first}',
+                      context.tr(
+                        "{0} to {1}",
+                        args: [
+                          shortDateTime(
+                            reportStart(_period, now),
+                          ).split(' ').first,
+                          shortDateTime(now).split(' ').first,
+                        ],
+                      ),
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                     const SizedBox(height: 20),
                     if (sales.isEmpty)
-                      const SizedBox(
+                      SizedBox(
                         height: 118,
                         child: Center(
                           child: Text(
-                            'Complete a sale to see the sales trend.',
+                            context.tr(
+                              "Complete a sale to see the sales trend.",
+                            ),
                             textAlign: TextAlign.center,
                           ),
                         ),
@@ -240,7 +252,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             ),
             const SizedBox(height: 22),
             Text(
-              'Top products',
+              context.tr("Top products"),
               style: Theme.of(
                 context,
               ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
@@ -248,10 +260,14 @@ class _ReportsScreenState extends State<ReportsScreen> {
             const SizedBox(height: 8),
             Card(
               child: topProducts.isEmpty
-                  ? const Padding(
+                  ? Padding(
                       padding: EdgeInsets.all(24),
                       child: Center(
-                        child: Text('Complete a sale to see product rankings.'),
+                        child: Text(
+                          context.tr(
+                            "Complete a sale to see product rankings.",
+                          ),
+                        ),
                       ),
                     )
                   : Column(
@@ -267,7 +283,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
                               ),
                               title: Text(ranked.value.key),
                               trailing: Text(
-                                '${ranked.value.value} sold',
+                                context.tr(
+                                  "{0} sold",
+                                  args: [ranked.value.value],
+                                ),
                                 style: const TextStyle(
                                   fontWeight: FontWeight.w700,
                                 ),
@@ -285,12 +304,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Payment breakdown',
+                      context.tr("Payment breakdown"),
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: 18),
                     _PaymentBar(
-                      label: 'Cash',
+                      label: context.tr("Cash"),
                       value: cash,
                       total: total,
                       color: Theme.of(context).colorScheme.primary,
@@ -312,23 +331,25 @@ class _ReportsScreenState extends State<ReportsScreen> {
               children: [
                 Expanded(
                   child: Text(
-                    'Transaction history',
+                    context.tr("Transaction history"),
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
                 const SizedBox(width: 12),
-                Text('${sales.length} record(s)'),
+                Text(context.tr("{0} record(s)", args: [sales.length])),
               ],
             ),
             const SizedBox(height: 8),
             if (sales.isEmpty)
-              const Card(
+              Card(
                 child: Padding(
                   padding: EdgeInsets.all(28),
                   child: Center(
-                    child: Text('No completed sales in this period.'),
+                    child: Text(
+                      context.tr("No completed sales in this period."),
+                    ),
                   ),
                 ),
               )
@@ -352,8 +373,16 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
                       subtitle: Text(
-                        '${shortDateTime(sale.createdAt)}\n'
-                        '${sale.items.length} product line(s) • ${sale.paymentType == PaymentType.cash ? 'Cash' : 'Utang'}',
+                        context.tr(
+                          "{0}\n{1} product line(s) • {2}",
+                          args: [
+                            shortDateTime(sale.createdAt),
+                            sale.items.length,
+                            sale.paymentType == PaymentType.cash
+                                ? 'Cash'
+                                : 'Utang',
+                          ],
+                        ),
                       ),
                       isThreeLine: true,
                       trailing: SizedBox(

@@ -24,10 +24,18 @@ class CloudSyncException implements Exception {
 /// `sariscan_supabase_setup.sql`, which exchange the same snapshot JSON the
 /// app has always produced.
 class SupabaseSyncService {
-  SupabaseSyncService({SupabaseClient? client})
-    : _client = client ?? Supabase.instance.client;
+  SupabaseSyncService({
+    SupabaseClient? client,
+    this.requestTimeout = const Duration(seconds: 20),
+  }) : _client = client ?? Supabase.instance.client;
 
   final SupabaseClient _client;
+  final Duration requestTimeout;
+
+  Future<dynamic> _rpc(
+    String function, {
+    required Map<String, dynamic> params,
+  }) => _client.rpc(function, params: params).timeout(requestTimeout);
 
   static const _notFound = 'P0002';
   static const _notMember = '42501';
@@ -35,7 +43,7 @@ class SupabaseSyncService {
   Future<void> _ensureSignedIn() async {
     if (_client.auth.currentSession != null) return;
     try {
-      await _client.auth.signInAnonymously();
+      await _client.auth.signInAnonymously().timeout(requestTimeout);
     } on AuthException catch (error) {
       throw CloudSyncException(
         'Could not sign in to cloud sync: ${error.message}',
@@ -65,12 +73,12 @@ class SupabaseSyncService {
   ) async {
     await _ensureSignedIn();
     try {
-      return await _client.rpc(function, params: params);
+      return await _rpc(function, params: params);
     } on PostgrestException catch (error) {
       if (error.code != _notMember) rethrow;
     }
-    await _client.rpc('join_store', params: {'p_code': syncCode});
-    return _client.rpc(function, params: params);
+    await _rpc('join_store', params: {'p_code': syncCode});
+    return _rpc(function, params: params);
   }
 
   /// Creates a new cloud store with [snapshot] as its starting data and
@@ -78,11 +86,13 @@ class SupabaseSyncService {
   Future<String> createSyncCode(Map<String, dynamic> snapshot) async {
     await _ensureSignedIn();
     try {
-      final code = await _client.rpc(
-        'create_store',
-        params: {'p_snapshot': snapshot},
-      );
-      return '$code';
+      final code = await _rpc('create_store', params: {'p_snapshot': snapshot});
+      if (code is! String || code.trim().isEmpty) {
+        throw const CloudSyncException(
+          'The cloud returned an invalid sync code.',
+        );
+      }
+      return code;
     } on PostgrestException catch (error) {
       throw _friendly(error);
     }
@@ -115,15 +125,24 @@ class SupabaseSyncService {
       final dynamic result;
       if (join) {
         await _ensureSignedIn();
-        result = await _client.rpc('join_store', params: {'p_code': syncCode});
+        result = await _rpc('join_store', params: {'p_code': syncCode});
       } else {
         result = await _memberRpc(syncCode, 'pull_snapshot', {
           'p_code': syncCode,
         });
       }
-      if (result is! Map) return null;
+      if (result == null) return null;
+      if (result is! Map) {
+        throw const CloudSyncException(
+          'The cloud returned an invalid snapshot.',
+        );
+      }
       final data = result['data'];
-      if (data is! Map) return null;
+      if (data is! Map) {
+        throw const CloudSyncException(
+          'The cloud returned an invalid snapshot.',
+        );
+      }
       return CloudSnapshot(
         data: Map<String, dynamic>.from(data),
         updatedAt: DateTime.tryParse('${result['updated_at']}')?.toLocal(),

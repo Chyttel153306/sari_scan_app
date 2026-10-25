@@ -1,3 +1,4 @@
+import '../l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
@@ -15,7 +16,8 @@ import '../widgets/product_grid.dart';
 import 'barcode_scanner_screen.dart';
 
 class ProductsScreen extends StatefulWidget {
-  const ProductsScreen({super.key, required this.store});
+  const ProductsScreen({super.key, required this.store, this.addTutorialKey});
+  final Key? addTutorialKey;
 
   final AppStore store;
 
@@ -65,7 +67,10 @@ class _ProductsScreenState extends State<ProductsScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          '${addition.quantity} added to ${product.name}. Stock: ${product.stock}.',
+          context.tr(
+            "{0} added to {1}. Stock: {2}.",
+            args: [addition.quantity, product.name, product.stock],
+          ),
         ),
       ),
     );
@@ -75,31 +80,33 @@ class _ProductsScreenState extends State<ProductsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete product?'),
+        title: Text(context.tr("Delete product?")),
         content: Text(
-          'Delete ${product.name} from inventory and the cart? '
-          'Past sales and utang records will be kept. This cannot be undone.',
+          context.tr(
+            "Delete {0} from inventory and the cart? Past sales and utang records will be kept. This cannot be undone.",
+            args: [product.name],
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(context.tr("Cancel")),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.error,
             ),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete product'),
+            child: Text(context.tr("Delete product")),
           ),
         ],
       ),
     );
     if (!mounted || confirmed != true) return;
     widget.store.deleteProduct(product);
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('${product.name} deleted.')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(context.tr("{0} deleted.", args: [product.name]))),
+    );
   }
 
   @override
@@ -114,8 +121,8 @@ class _ProductsScreenState extends State<ProductsScreen> {
               TextField(
                 controller: _searchController,
                 onChanged: (value) => setState(() => _query = value),
-                decoration: const InputDecoration(
-                  hintText: 'Search products...',
+                decoration: InputDecoration(
+                  hintText: context.tr("Search products..."),
                   isDense: true,
                   prefixIcon: Icon(Icons.search),
                 ),
@@ -137,7 +144,9 @@ class _ProductsScreenState extends State<ProductsScreen> {
                               padding: const EdgeInsets.only(right: 8),
                               child: ChoiceChip(
                                 label: Text(
-                                  category == 'All' ? 'All Items' : category,
+                                  category == 'All'
+                                      ? context.tr("All Items")
+                                      : category,
                                 ),
                                 labelStyle: TextStyle(
                                   color: _category == category
@@ -161,16 +170,16 @@ class _ProductsScreenState extends State<ProductsScreen> {
                 children: [
                   Expanded(
                     child: Text(
-                      '${_products.length} products',
+                      context.tr("{0} products", args: [_products.length]),
                       style: TextStyle(
                         fontSize: 12,
                         color: AppTheme.of(context).muted,
                       ),
                     ),
                   ),
-                  const Flexible(
+                  Flexible(
                     child: Text(
-                      'Show archived',
+                      context.tr("Show archived"),
                       style: TextStyle(fontSize: 12),
                     ),
                   ),
@@ -182,9 +191,11 @@ class _ProductsScreenState extends State<ProductsScreen> {
               ),
               const SizedBox(height: 4),
               if (_products.isEmpty)
-                const EmptyState(
-                  title: 'No products found.',
-                  message: 'Add a product or try a different search.',
+                EmptyState(
+                  title: context.tr("No products found."),
+                  message: context.tr(
+                    "Add a product or try a different search.",
+                  ),
                 )
               else
                 LayoutBuilder(
@@ -206,9 +217,9 @@ class _ProductsScreenState extends State<ProductsScreen> {
                         onArchive: () {
                           final error = widget.store.toggleArchive(product);
                           if (error != null) {
-                            ScaffoldMessenger.of(
-                              context,
-                            ).showSnackBar(SnackBar(content: Text(error)));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(context.tr(error))),
+                            );
                           }
                         },
                         onDelete: () => _deleteProduct(product),
@@ -222,6 +233,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
             right: 16,
             bottom: 16,
             child: FloatingActionButton(
+              key: widget.addTutorialKey,
               heroTag: 'addProduct',
               onPressed: _editProduct,
               child: const Icon(Icons.add),
@@ -247,6 +259,7 @@ class _AddStockDialogState extends State<AddStockDialog> {
   final _formKey = GlobalKey<FormState>();
   final _quantity = TextEditingController();
   final _note = TextEditingController();
+  bool _submitted = false;
 
   @override
   void dispose() {
@@ -258,13 +271,20 @@ class _AddStockDialogState extends State<AddStockDialog> {
   int get _quantityValue => int.tryParse(_quantity.text) ?? 0;
 
   void _save() {
-    if (!(_formKey.currentState?.validate() ?? false)) return;
-    final addition = widget.store.addStock(
-      product: widget.product,
-      quantity: _quantityValue,
-      note: _note.text,
-    );
-    Navigator.pop(context, addition);
+    if (_submitted || !(_formKey.currentState?.validate() ?? false)) return;
+    try {
+      final addition = widget.store.addStock(
+        product: widget.product,
+        quantity: _quantityValue,
+        note: _note.text,
+      );
+      _submitted = true;
+      Navigator.pop(context, addition);
+    } on ArgumentError catch (error) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('${error.message}')));
+    }
   }
 
   @override
@@ -272,7 +292,7 @@ class _AddStockDialogState extends State<AddStockDialog> {
     final history = widget.store.stockAdditionsFor(widget.product);
     final afterStock = widget.product.stock + _quantityValue;
     return AlertDialog(
-      title: const Text('Add stock'),
+      title: Text(context.tr("Add stock")),
       content: Form(
         key: _formKey,
         child: SingleChildScrollView(
@@ -283,7 +303,10 @@ class _AddStockDialogState extends State<AddStockDialog> {
               Text(widget.product.name),
               const SizedBox(height: 4),
               Text(
-                'Current stock: ${widget.product.stock}  •  After adding: $afterStock',
+                context.tr(
+                  "Current stock: {0}  •  After adding: {1}",
+                  args: [widget.product.stock, afterStock],
+                ),
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 18),
@@ -292,14 +315,14 @@ class _AddStockDialogState extends State<AddStockDialog> {
                 autofocus: true,
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: const InputDecoration(
-                  labelText: 'Quantity received',
+                decoration: InputDecoration(
+                  labelText: context.tr("Quantity received"),
                 ),
                 onChanged: (_) => setState(() {}),
                 validator: (value) {
                   final quantity = int.tryParse(value ?? '');
                   return quantity == null || quantity <= 0
-                      ? 'Enter a quantity greater than zero.'
+                      ? context.tr('Enter a quantity greater than zero.')
                       : null;
                 },
               ),
@@ -308,18 +331,20 @@ class _AddStockDialogState extends State<AddStockDialog> {
                 controller: _note,
                 textCapitalization: TextCapitalization.sentences,
                 maxLines: 2,
-                decoration: const InputDecoration(
-                  labelText: 'Delivery / invoice note',
-                  hintText: 'e.g., Supplier invoice #1234',
+                decoration: InputDecoration(
+                  labelText: context.tr("Delivery / invoice note"),
+                  hintText: context.tr("e.g., Supplier invoice #1234"),
                 ),
                 validator: (value) => value == null || value.trim().isEmpty
-                    ? 'Add a delivery or invoice note for the audit trail.'
+                    ? context.tr(
+                        'Add a delivery or invoice note for the audit trail.',
+                      )
                     : null,
               ),
               if (history.isNotEmpty) ...[
                 const SizedBox(height: 20),
-                const Text(
-                  'STOCK-IN HISTORY',
+                Text(
+                  context.tr("STOCK-IN HISTORY"),
                   style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 6),
@@ -340,12 +365,12 @@ class _AddStockDialogState extends State<AddStockDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: Text(context.tr("Cancel")),
         ),
         FilledButton.icon(
           onPressed: _save,
           icon: const Icon(Icons.add_box_outlined),
-          label: const Text('Add stock'),
+          label: Text(context.tr("Add stock")),
         ),
       ],
     );
@@ -509,9 +534,13 @@ class _ProductDialogState extends State<ProductDialog> {
                       padding: const EdgeInsets.all(14),
                       child: Text(
                         _category.text.trim().isEmpty
-                            ? 'No categories yet. Type to create one.'
-                            : 'No match — keep typing to create '
-                                  '"${_category.text.trim()}".',
+                            ? context.tr(
+                                "No categories yet. Type to create one.",
+                              )
+                            : context.tr(
+                                "No match — keep typing to create \"{0}\".",
+                                args: [_category.text.trim()],
+                              ),
                         style: TextStyle(
                           fontSize: 12,
                           color: AppTheme.of(context).muted,
@@ -606,7 +635,11 @@ class _ProductDialogState extends State<ProductDialog> {
       if (!mounted) return;
       setState(() => _saving = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not save the product photo: $error')),
+        SnackBar(
+          content: Text(
+            context.tr("Could not save the product photo: {0}", args: [error]),
+          ),
+        ),
       );
       return;
     }
@@ -643,12 +676,12 @@ class _ProductDialogState extends State<ProductDialog> {
           children: [
             ListTile(
               leading: const Icon(Icons.photo_camera_outlined),
-              title: const Text('Take a photo'),
+              title: Text(context.tr("Take a photo")),
               onTap: () => Navigator.pop(context, ImageSource.camera),
             ),
             ListTile(
               leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('Choose from gallery'),
+              title: Text(context.tr("Choose from gallery")),
               onTap: () => Navigator.pop(context, ImageSource.gallery),
             ),
             const SizedBox(height: 12),
@@ -656,16 +689,27 @@ class _ProductDialogState extends State<ProductDialog> {
         ),
       ),
     );
-    if (source == null) return;
-    final photo = await _imagePicker.pickImage(
-      source: source,
-      maxWidth: 2400,
-      maxHeight: 2400,
-      imageQuality: 95,
-    );
-    if (photo == null || !mounted) return;
-    _setPhoto(photo.path);
-    await _suggestProductDetailsFromPhoto(photo.path);
+    if (source == null || !mounted) return;
+    try {
+      final photo = await _imagePicker.pickImage(
+        source: source,
+        maxWidth: 2400,
+        maxHeight: 2400,
+        imageQuality: 95,
+      );
+      if (photo == null || !mounted) return;
+      _setPhoto(photo.path);
+      await _suggestProductDetailsFromPhoto(photo.path);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.tr('Could not save the product photo: {0}', args: [error]),
+          ),
+        ),
+      );
+    }
   }
 
   void _setPhoto(String? path) {
@@ -756,7 +800,11 @@ class _ProductDialogState extends State<ProductDialog> {
     final isNew = widget.product == null;
     return Scaffold(
       backgroundColor: colors.surface,
-      appBar: AppBar(title: Text(isNew ? 'Add New Product' : 'Edit Product')),
+      appBar: AppBar(
+        title: Text(
+          isNew ? context.tr("Add New Product") : context.tr("Edit Product"),
+        ),
+      ),
       body: AbsorbPointer(
         absorbing: _saving,
         child: Form(
@@ -768,15 +816,15 @@ class _ProductDialogState extends State<ProductDialog> {
               children: [
                 Text(
                   isNew
-                      ? 'Enter details for the new inventory item.'
-                      : 'Update this inventory item.',
+                      ? context.tr("Enter details for the new inventory item.")
+                      : context.tr("Update this inventory item."),
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: colors.onSurfaceVariant,
                   ),
                 ),
                 const SizedBox(height: 24),
-                const Text(
-                  'PRODUCT IMAGE',
+                Text(
+                  context.tr("PRODUCT IMAGE"),
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 8),
@@ -802,7 +850,7 @@ class _ProductDialogState extends State<ProductDialog> {
                                 ),
                               ),
                               const SizedBox(height: 10),
-                              const Text('Upload Product Photo'),
+                              Text(context.tr("Upload Product Photo")),
                             ],
                           )
                         : Stack(
@@ -813,7 +861,7 @@ class _ProductDialogState extends State<ProductDialog> {
                                 right: 8,
                                 top: 8,
                                 child: IconButton.filledTonal(
-                                  tooltip: 'Remove photo',
+                                  tooltip: context.tr("Remove photo"),
                                   onPressed: () => _setPhoto(null),
                                   icon: const Icon(Icons.close_rounded),
                                 ),
@@ -823,7 +871,7 @@ class _ProductDialogState extends State<ProductDialog> {
                   ),
                 ),
                 if (_recognizingPhoto)
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.only(top: 8),
                     child: Row(
                       children: [
@@ -832,7 +880,7 @@ class _ProductDialogState extends State<ProductDialog> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         ),
                         SizedBox(width: 8),
-                        Text('Reading product label…'),
+                        Text(context.tr("Reading product label…")),
                       ],
                     ),
                   ),
@@ -840,7 +888,7 @@ class _ProductDialogState extends State<ProductDialog> {
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
                     child: Text(
-                      _photoMessage!,
+                      context.tr(_photoMessage!),
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ),
@@ -848,9 +896,9 @@ class _ProductDialogState extends State<ProductDialog> {
                 TextFormField(
                   controller: _name,
                   textCapitalization: TextCapitalization.words,
-                  decoration: const InputDecoration(
-                    labelText: 'Product Name',
-                    hintText: 'e.g., Bear Brand Fortified 320g',
+                  decoration: InputDecoration(
+                    labelText: context.tr("Product Name"),
+                    hintText: context.tr("e.g., Bear Brand Fortified 320g"),
                   ),
                   validator: _required,
                 ),
@@ -870,10 +918,12 @@ class _ProductDialogState extends State<ProductDialog> {
                         focusNode: _categoryFocusNode,
                         textCapitalization: TextCapitalization.words,
                         decoration: InputDecoration(
-                          labelText: 'Category',
-                          hintText: 'e.g., Drinks, Snacks, Canned Goods',
+                          labelText: context.tr("Category"),
+                          hintText: context.tr(
+                            "e.g., Drinks, Snacks, Canned Goods",
+                          ),
                           suffixIcon: IconButton(
-                            tooltip: 'Choose existing category',
+                            tooltip: context.tr("Choose existing category"),
                             onPressed: _toggleCategoryDropdown,
                             icon: AnimatedRotation(
                               turns: _categoryDropdownOpen ? 0.5 : 0,
@@ -909,8 +959,8 @@ class _ProductDialogState extends State<ProductDialog> {
                         keyboardType: const TextInputType.numberWithOptions(
                           decimal: true,
                         ),
-                        decoration: const InputDecoration(
-                          labelText: 'Cost Price',
+                        decoration: InputDecoration(
+                          labelText: context.tr("Cost Price"),
                           prefixText: '₱ ',
                         ),
                         validator: _money,
@@ -924,15 +974,21 @@ class _ProductDialogState extends State<ProductDialog> {
                           decimal: true,
                         ),
                         decoration: InputDecoration(
-                          labelText: 'Selling Price',
+                          labelText: context.tr("Selling Price"),
                           prefixText: '₱ ',
                           helperText: _priceManuallyEdited
-                              ? 'Manually set'
-                              : 'Auto: cost + '
-                                    '${_formatPercent(widget.store.markupPercent)}%',
+                              ? context.tr("Manually set")
+                              : context.tr(
+                                  "Auto: cost + {0}%",
+                                  args: [
+                                    _formatPercent(widget.store.markupPercent),
+                                  ],
+                                ),
                           helperMaxLines: 2,
                           suffixIcon: IconButton(
-                            tooltip: 'Recalculate from cost + markup',
+                            tooltip: context.tr(
+                              "Recalculate from cost + markup",
+                            ),
                             onPressed: () {
                               setState(() => _priceManuallyEdited = false);
                               _handleCostChanged();
@@ -963,8 +1019,8 @@ class _ProductDialogState extends State<ProductDialog> {
                           inputFormatters: [
                             FilteringTextInputFormatter.digitsOnly,
                           ],
-                          decoration: const InputDecoration(
-                            labelText: 'Initial Stock',
+                          decoration: InputDecoration(
+                            labelText: context.tr("Initial Stock"),
                           ),
                           validator: _wholeNumber,
                         ),
@@ -972,8 +1028,8 @@ class _ProductDialogState extends State<ProductDialog> {
                     else
                       Expanded(
                         child: InputDecorator(
-                          decoration: const InputDecoration(
-                            labelText: 'Current Stock',
+                          decoration: InputDecoration(
+                            labelText: context.tr("Current Stock"),
                           ),
                           child: Text(
                             '${widget.product!.stock}',
@@ -989,8 +1045,8 @@ class _ProductDialogState extends State<ProductDialog> {
                         inputFormatters: [
                           FilteringTextInputFormatter.digitsOnly,
                         ],
-                        decoration: const InputDecoration(
-                          labelText: 'Min Stock Alert',
+                        decoration: InputDecoration(
+                          labelText: context.tr("Min Stock Alert"),
                         ),
                         validator: _wholeNumber,
                       ),
@@ -1001,7 +1057,9 @@ class _ProductDialogState extends State<ProductDialog> {
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
                     child: Text(
-                      'Stock can only be increased from Add stock so each delivery is recorded.',
+                      context.tr(
+                        "Stock can only be increased from Add stock so each delivery is recorded.",
+                      ),
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: colors.onSurfaceVariant,
                       ),
@@ -1014,10 +1072,10 @@ class _ProductDialogState extends State<ProductDialog> {
                   autocorrect: false,
                   enableSuggestions: false,
                   decoration: InputDecoration(
-                    labelText: 'Barcode (optional)',
+                    labelText: context.tr("Barcode (optional)"),
                     prefixIcon: const Icon(Icons.qr_code_rounded),
                     suffixIcon: IconButton(
-                      tooltip: 'Scan barcode with camera',
+                      tooltip: context.tr("Scan barcode with camera"),
                       onPressed: _scanBarcode,
                       icon: const Icon(Icons.qr_code_scanner_rounded),
                     ),
@@ -1033,7 +1091,9 @@ class _ProductDialogState extends State<ProductDialog> {
                             ) !=
                             null;
                     return duplicate
-                        ? 'Another active product already uses this barcode.'
+                        ? context.tr(
+                            'Another active product already uses this barcode.',
+                          )
                         : null;
                   },
                 ),
@@ -1053,7 +1113,7 @@ class _ProductDialogState extends State<ProductDialog> {
               children: [
                 TextButton(
                   onPressed: _saving ? null : () => Navigator.pop(context),
-                  child: const Text('CANCEL'),
+                  child: Text(context.tr("CANCEL")),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -1068,7 +1128,11 @@ class _ProductDialogState extends State<ProductDialog> {
                             ),
                           )
                         : const Icon(Icons.save_outlined),
-                    label: Text(_saving ? 'SAVING...' : 'SAVE PRODUCT'),
+                    label: Text(
+                      _saving
+                          ? context.tr("SAVING...")
+                          : context.tr("SAVE PRODUCT"),
+                    ),
                   ),
                 ),
               ],
@@ -1079,18 +1143,19 @@ class _ProductDialogState extends State<ProductDialog> {
     );
   }
 
-  String? _required(String? value) =>
-      value == null || value.trim().isEmpty ? 'This field is required.' : null;
+  String? _required(String? value) => value == null || value.trim().isEmpty
+      ? context.tr('This field is required.')
+      : null;
 
   String? _money(String? value) {
     final number = double.tryParse(value ?? '');
     return number == null || !number.isFinite || number < 0
-        ? 'Enter a valid amount.'
+        ? context.tr('Enter a valid amount.')
         : null;
   }
 
   String? _wholeNumber(String? value) {
     final number = int.tryParse(value ?? '');
-    return number == null || number < 0 ? 'Enter 0 or more.' : null;
+    return number == null || number < 0 ? context.tr('Enter 0 or more.') : null;
   }
 }

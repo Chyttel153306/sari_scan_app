@@ -1,3 +1,4 @@
+import '../l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 
 import '../models/models.dart';
@@ -75,12 +76,15 @@ class CatalogProductCard extends StatelessWidget {
                       alignment: Alignment.centerLeft,
                       child: StatusPill(
                         product.isArchived
-                            ? 'Archived'
+                            ? context.tr("Archived")
                             : product.stock == 0
-                            ? 'Out of stock'
+                            ? context.tr("Out of stock")
                             : product.isLowStock
-                            ? 'LOW: ${product.stock}'
-                            : 'IN STOCK: ${product.stock}',
+                            ? context.tr("LOW: {0}", args: [product.stock])
+                            : context.tr(
+                                "IN STOCK: {0}",
+                                args: [product.stock],
+                              ),
                         color: unavailable
                             ? colors.error
                             : product.isLowStock
@@ -104,7 +108,7 @@ class CatalogProductCard extends StatelessWidget {
                         shadowColor: AppTheme.of(context).baseDark,
                         shape: const CircleBorder(),
                         child: PopupMenuButton<String>(
-                          tooltip: 'Product options',
+                          tooltip: context.tr("Product options"),
                           icon: const Icon(
                             Icons.more_vert,
                             color: Colors.white,
@@ -118,26 +122,26 @@ class CatalogProductCard extends StatelessWidget {
                           },
                           itemBuilder: (_) => [
                             if (!product.isArchived)
-                              const PopupMenuItem(
+                              PopupMenuItem(
                                 value: 'addStock',
-                                child: Text('Add stock'),
+                                child: Text(context.tr("Add stock")),
                               ),
                             if (!product.isArchived)
-                              const PopupMenuItem(
+                              PopupMenuItem(
                                 value: 'edit',
-                                child: Text('Edit product'),
+                                child: Text(context.tr("Edit product")),
                               ),
                             PopupMenuItem(
                               value: 'archive',
                               child: Text(
                                 product.isArchived
-                                    ? 'Restore product'
-                                    : 'Archive product',
+                                    ? context.tr("Restore product")
+                                    : context.tr("Archive product"),
                               ),
                             ),
-                            const PopupMenuItem(
+                            PopupMenuItem(
                               value: 'delete',
-                              child: Text('Delete product'),
+                              child: Text(context.tr("Delete product")),
                             ),
                           ],
                         ),
@@ -152,8 +156,8 @@ class CatalogProductCard extends StatelessWidget {
                       bottom: 8,
                       child: Tooltip(
                         message: product.imageUrl != null
-                            ? 'Photo will sync to other phones'
-                            : 'Photo is local to this phone only',
+                            ? context.tr("Photo will sync to other phones")
+                            : context.tr("Photo is local to this phone only"),
                         child: Container(
                           padding: const EdgeInsets.all(5),
                           decoration: BoxDecoration(
@@ -221,7 +225,7 @@ class CatalogProductCard extends StatelessWidget {
             if (inventory) const SizedBox(width: 2),
             if (inventory)
               IconButton.filledTonal(
-                tooltip: 'Add stock',
+                tooltip: context.tr("Add stock"),
                 onPressed: product.isArchived ? null : onAddStock,
                 icon: const Icon(Icons.add_box_outlined, size: 19),
                 style: IconButton.styleFrom(

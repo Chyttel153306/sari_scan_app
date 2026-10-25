@@ -155,6 +155,7 @@ void main() {
             addTearDown(
               tester.platformDispatcher.clearTextScaleFactorTestValue,
             );
+            await store.dismissTutorial();
             await tester.pumpWidget(SariScanApp(store: store));
             if (inventory) {
               await tester.tap(find.text('Products').last);

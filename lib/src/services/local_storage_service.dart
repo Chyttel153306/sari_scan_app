@@ -18,14 +18,23 @@ class LocalStorageService {
   }
 
   Future<Map<String, dynamic>?> loadSnapshot() async {
-    final source = await file.exists() ? file : File('${file.path}.bak');
-    if (!await source.exists()) return null;
-
-    final decoded = jsonDecode(await source.readAsString());
-    if (decoded is! Map<String, dynamic>) {
-      throw const FormatException('The local SariScan data file is invalid.');
+    Object? firstError;
+    for (final source in [file, File('${file.path}.bak')]) {
+      try {
+        if (!await source.exists()) continue;
+        final decoded = jsonDecode(await source.readAsString());
+        if (decoded is! Map<String, dynamic>) {
+          throw const FormatException(
+            'The local SariScan data file is invalid.',
+          );
+        }
+        return decoded;
+      } catch (error) {
+        firstError ??= error;
+      }
     }
-    return decoded;
+    if (firstError != null) throw firstError;
+    return null;
   }
 
   Future<void> saveSnapshot(Map<String, dynamic> snapshot) async {
@@ -43,7 +52,7 @@ class LocalStorageService {
     await file.rename(backup.path);
     try {
       await temporary.rename(file.path);
-      await backup.delete();
+      // Keep the last complete snapshot available for corruption recovery.
     } catch (_) {
       if (!await file.exists() && await backup.exists()) {
         await backup.rename(file.path);
@@ -95,8 +104,29 @@ class LocalStorageService {
 
   Future<void> deleteProductImage(String? imagePath) async {
     if (imagePath == null || imagePath.isEmpty) return;
+    final cache = Directory(
+      '${file.parent.path}${Platform.pathSeparator}product_images',
+    );
+    if (!await cache.exists()) return;
+    // Never follow a snapshot-supplied path to another file or a symbolic link.
+    if (await FileSystemEntity.type(imagePath, followLinks: false) !=
+        FileSystemEntityType.file) {
+      return;
+    }
+    final root = await file.parent.resolveSymbolicLinks();
+    final cachePath = await cache.resolveSymbolicLinks();
     final image = File(imagePath);
-    if (await image.exists()) await image.delete();
+    final resolved = await image.resolveSymbolicLinks();
+    String normalized(String path) =>
+        Platform.isWindows ? path.toLowerCase() : path;
+    final expectedCache = '$root${Platform.pathSeparator}product_images';
+    if (normalized(cachePath) != normalized(expectedCache) ||
+        !normalized(
+          resolved,
+        ).startsWith(normalized('$cachePath${Platform.pathSeparator}'))) {
+      return;
+    }
+    await image.delete();
   }
 
   /// Clears only this app's managed photo cache, never cloud objects or

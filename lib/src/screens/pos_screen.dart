@@ -1,3 +1,4 @@
+import '../l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 
 import '../models/models.dart';
@@ -14,7 +15,8 @@ import 'checkout_screen.dart';
 import 'products_screen.dart';
 
 class PosScreen extends StatefulWidget {
-  const PosScreen({super.key, required this.store});
+  const PosScreen({super.key, required this.store, this.scanTutorialKey});
+  final Key? scanTutorialKey;
 
   final AppStore store;
 
@@ -60,18 +62,21 @@ class _PosScreenState extends State<PosScreen> {
       final addProduct = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Barcode not found'),
+          title: Text(context.tr("Barcode not found")),
           content: Text(
-            'No product uses barcode $barcode. Would you like to add it to inventory?',
+            context.tr(
+              "No product uses barcode {0}. Would you like to add it to inventory?",
+              args: [barcode],
+            ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
+              child: Text(context.tr("Cancel")),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Add product'),
+              child: Text(context.tr("Add product")),
             ),
           ],
         ),
@@ -99,10 +104,13 @@ class _PosScreenState extends State<PosScreen> {
       SnackBar(
         content: Text(
           added
-              ? '${product.name} added to cart.'
+              ? context.tr("{0} added to cart.", args: [product.name])
               : product.stock <= 0
-              ? '${product.name} is out of stock.'
-              : 'All available stock for ${product.name} is already in the cart.',
+              ? context.tr("{0} is out of stock.", args: [product.name])
+              : context.tr(
+                  "All available stock for {0} is already in the cart.",
+                  args: [product.name],
+                ),
         ),
       ),
     );
@@ -163,7 +171,7 @@ class _PosScreenState extends State<PosScreen> {
                             onChanged: (value) =>
                                 setState(() => _query = value),
                             decoration: InputDecoration(
-                              hintText: 'Search product...',
+                              hintText: context.tr("Search product..."),
                               prefixIcon: const Icon(Icons.search),
                               suffixIcon: _query.isEmpty
                                   ? null
@@ -179,7 +187,8 @@ class _PosScreenState extends State<PosScreen> {
                         ),
                         const SizedBox(width: 10),
                         IconButton.filled(
-                          tooltip: 'Scan barcode',
+                          key: widget.scanTutorialKey,
+                          tooltip: context.tr("Scan barcode"),
                           onPressed: _openBarcodeEntry,
                           icon: const Icon(Icons.qr_code_scanner_rounded),
                           style: IconButton.styleFrom(
@@ -205,7 +214,9 @@ class _PosScreenState extends State<PosScreen> {
                         final category = categories[index];
                         return ChoiceChip(
                           label: Text(
-                            category == 'All' ? 'All Items' : category,
+                            category == 'All'
+                                ? context.tr("All Items")
+                                : category,
                           ),
                           labelStyle: TextStyle(
                             color: _category == category
@@ -229,7 +240,10 @@ class _PosScreenState extends State<PosScreen> {
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                     child: Text(
-                      '${visibleProducts.length} products available',
+                      context.tr(
+                        "{0} products available",
+                        args: [visibleProducts.length],
+                      ),
                       style: TextStyle(
                         fontSize: 12,
                         color: AppTheme.of(context).muted,
@@ -238,12 +252,14 @@ class _PosScreenState extends State<PosScreen> {
                   ),
                 ),
                 if (visibleProducts.isEmpty)
-                  const SliverFillRemaining(
+                  SliverFillRemaining(
                     hasScrollBody: false,
                     child: Center(
                       child: EmptyState(
-                        title: 'No matching products found.',
-                        message: 'Add products in inventory to start selling.',
+                        title: context.tr("No matching products found."),
+                        message: context.tr(
+                          "Add products in inventory to start selling.",
+                        ),
                       ),
                     ),
                   )
@@ -299,7 +315,7 @@ class _PosScreenState extends State<PosScreen> {
                             children: [
                               IconButton(
                                 onPressed: _openCart,
-                                tooltip: 'View cart',
+                                tooltip: context.tr("View cart"),
                                 icon: const Icon(
                                   Icons.shopping_bag_outlined,
                                   color: Colors.white70,
@@ -315,7 +331,10 @@ class _PosScreenState extends State<PosScreen> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        '${widget.store.cartItemCount} Items in Cart',
+                                        context.tr(
+                                          "{0} Items in Cart",
+                                          args: [widget.store.cartItemCount],
+                                        ),
                                         style: const TextStyle(
                                           color: Color(0xFFCBD5E1),
                                           fontSize: 10,
@@ -345,7 +364,7 @@ class _PosScreenState extends State<PosScreen> {
                                 ),
                                 iconAlignment: IconAlignment.end,
                                 icon: const Icon(Icons.arrow_forward, size: 18),
-                                label: const Text('Charge'),
+                                label: Text(context.tr("Charge")),
                               ),
                             ],
                           ),
@@ -375,12 +394,12 @@ class _CartSheet extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Current cart',
+            context.tr("Current cart"),
             style: Theme.of(
               context,
             ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
           ),
-          Text('${store.cartItemCount} item(s)'),
+          Text(context.tr("{0} item(s)", args: [store.cartItemCount])),
           const SizedBox(height: 12),
           Expanded(
             child: ListView.separated(
@@ -423,7 +442,7 @@ class _CartSheet extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  'Total',
+                  context.tr("Total"),
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
@@ -442,7 +461,7 @@ class _CartSheet extends StatelessWidget {
           FilledButton.icon(
             onPressed: lines.isEmpty ? null : onCheckout,
             icon: const Icon(Icons.payments_outlined),
-            label: const Text('Proceed to checkout'),
+            label: Text(context.tr("Proceed to checkout")),
           ),
         ],
       ),

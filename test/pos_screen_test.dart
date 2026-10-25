@@ -34,6 +34,7 @@ void main() {
     final store = _CountingStore(products: [product]);
     addTearDown(store.dispose);
     await store.openSecureSession('Owner');
+    await store.dismissTutorial();
     await tester.pumpWidget(SariScanApp(store: store));
     await tester.pumpAndSettle();
     expect(find.byType(ProductsScreen, skipOffstage: false), findsNothing);

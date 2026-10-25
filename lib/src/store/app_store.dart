@@ -4,6 +4,9 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import '../models/models.dart';
+import '../utils/money.dart';
+import '../services/snapshot_validation.dart';
+import '../l10n/app_language.dart';
 import '../utils/barcodes.dart';
 import '../theme/theme_choice.dart';
 import '../models/sales_trend.dart';
@@ -35,6 +38,14 @@ class ImportedProductImage {
   final String? path;
   final String? url;
 }
+
+typedef _StoreData = ({
+  List<Product> products,
+  List<Customer> customers,
+  List<SaleRecord> sales,
+  List<StockAddition> additions,
+  double markup,
+});
 
 class AppStore extends ChangeNotifier {
   AppStore({
@@ -86,12 +97,22 @@ class AppStore extends ChangeNotifier {
   final SupabaseImageService? imageSync;
 
   Future<void> _persistenceQueue = Future.value();
+  Future<String?> _lastQueuedSave = Future.value(null);
+  Future<void> _photoRestoration = Future.value();
+  Future<void> get photoRestorationSettled => _photoRestoration;
+  bool _disposed = false;
+  bool _syncInProgress = false;
+  bool _loadFailed = false;
+  int _revision = 0;
 
   String? currentUserName;
   String? storageError;
   bool isLoading = false;
   Map<String, dynamic>? _account;
   double markupPercent;
+  AppLanguage _language = AppLanguage.english;
+  AppLanguage get language => _language;
+
   ThemeChoice _themeChoice = ThemeChoice.defaultTheme;
   ThemeChoice get themeChoice => _themeChoice;
 
@@ -100,6 +121,15 @@ class AppStore extends ChangeNotifier {
   String? syncCode;
   DateTime? lastSyncedAt;
   String? photoSyncWarning;
+
+  bool _tutorialDismissed = false;
+  bool get needsFirstUseTutorial => !_tutorialDismissed;
+
+  Future<String?> dismissTutorial() async {
+    _tutorialDismissed = true;
+    notifyListeners();
+    return _saveNow();
+  }
 
   bool get isAuthenticated => currentUserName != null;
   bool get hasLocalAccount => _account != null;
@@ -118,12 +148,14 @@ class AppStore extends ChangeNotifier {
 
   @override
   void notifyListeners() {
+    if (_disposed) return;
     _dataChanges.notifyListeners();
     super.notifyListeners();
   }
 
   @override
   void dispose() {
+    _disposed = true;
     _dataChanges.dispose();
     imageSync?.dispose();
     super.dispose();
@@ -148,8 +180,9 @@ class AppStore extends ChangeNotifier {
   int get cartItemCount =>
       _cart.values.fold(0, (total, quantity) => total + quantity);
 
-  double get cartTotal =>
-      cartLines.fold(0, (total, line) => total + line.subtotal);
+  double get cartTotal => roundMoney(
+    cartLines.fold<double>(0, (total, line) => total + line.subtotal),
+  );
 
   double get totalOutstanding =>
       customers.fold(0, (total, customer) => total + customer.balance);
@@ -169,12 +202,33 @@ class AppStore extends ChangeNotifier {
         final migrated = _restoreSnapshot(snapshot);
         if (migrated) await storage!.saveSnapshot(_snapshot());
       }
-      await _hydrateMissingProductImages();
+      _loadFailed = false;
+      _photoRestoration = _restorePhotosInBackground();
       storageError = null;
     } catch (error) {
+      _loadFailed = true;
       storageError = 'Local data could not be loaded: $error';
     } finally {
       isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _restorePhotosInBackground() async {
+    final previous = {for (final p in products) p: p.imagePath};
+    try {
+      await _hydrateMissingProductImages();
+      if (_disposed) return;
+      if (products.any(
+        (p) => previous.containsKey(p) && previous[p] != p.imagePath,
+      )) {
+        await _saveNow();
+      } else {
+        notifyListeners();
+      }
+    } catch (error) {
+      if (_disposed) return;
+      photoSyncWarning = 'Photos could not be restored: $error';
       notifyListeners();
     }
   }
@@ -194,19 +248,33 @@ class AppStore extends ChangeNotifier {
     final validation = validateOwnerName(name);
     if (validation != null) return validation;
     final normalized = name.trim();
+    final previous = _account;
     _account ??= {'name': normalized};
-    currentUserName = '${_account!['name']}';
+    final error = await _saveNow();
+    if (error != null) {
+      _account = previous;
+    } else {
+      currentUserName = '${_account!['name']}';
+    }
     notifyListeners();
-    return _saveNow();
+    return error;
   }
 
   Future<String?> renameOwner(String name) async {
     final normalized = name.trim();
     if (normalized.isEmpty) return 'Enter a store name.';
     if (_account == null) return 'No store is registered on this phone yet.';
+    final previous = _account!['name'];
     _account!['name'] = normalized;
+    final error = await _saveNow();
+    if (error != null && _account?['name'] == normalized) {
+      _account!['name'] = previous;
+    }
+    if (error == null && currentUserName != null) {
+      currentUserName = registeredOwnerName;
+    }
     notifyListeners();
-    return _saveNow();
+    return error;
   }
 
   /// Updates the default markup percentage used to suggest selling prices.
@@ -237,7 +305,21 @@ class AppStore extends ChangeNotifier {
     return error;
   }
 
+  /// Language is a preference for this phone and is excluded from cloud sync.
+  Future<String?> updateLanguage(AppLanguage language) async {
+    final previous = _language;
+    _language = language;
+    notifyListeners();
+    final error = await _saveNow();
+    if (error != null && _language == language) {
+      _language = previous;
+      notifyListeners();
+    }
+    return error;
+  }
+
   Future<void> logout() async {
+    _revision++;
     currentUserName = null;
     _cart.clear();
     notifyListeners();
@@ -248,6 +330,7 @@ class AppStore extends ChangeNotifier {
     final current = _cart[product.id] ?? 0;
     if (current >= product.stock) return;
     _cart[product.id] = current + 1;
+    _revision++;
     super.notifyListeners();
   }
 
@@ -258,11 +341,13 @@ class AppStore extends ChangeNotifier {
     } else {
       _cart[product.id] = current - 1;
     }
+    _revision++;
     super.notifyListeners();
   }
 
   void removeFromCart(Product product) {
     _cart.remove(product.id);
+    _revision++;
     super.notifyListeners();
   }
 
@@ -398,6 +483,14 @@ class AppStore extends ChangeNotifier {
       throw ArgumentError.value(note, 'note', 'A stock-in note is required.');
     }
 
+    final updatedStock = product.stock + quantity;
+    if (updatedStock < product.stock) {
+      throw ArgumentError.value(
+        quantity,
+        'quantity',
+        'Stock quantity is too large.',
+      );
+    }
     final addition = StockAddition(
       id: _nextId(stockAdditions.map((entry) => entry.id)),
       productId: product.id,
@@ -407,7 +500,7 @@ class AppStore extends ChangeNotifier {
       addedBy: currentUserName ?? 'Unknown user',
       note: normalizedNote,
     );
-    product.stock += quantity;
+    product.stock = updatedStock;
     stockAdditions.insert(0, addition);
     notifyListeners();
     _queueSave();
@@ -458,16 +551,16 @@ class AppStore extends ChangeNotifier {
   ///
   /// When the photo is unchanged from [previousPath] but was never
   /// uploaded, this backfills it by uploading the existing local file.
-  /// A replaced or removed photo also has its old cloud copy deleted
-  /// (best effort).
+  /// Previous images remain available because older local and cloud snapshots
+  /// can still reference them. Importing prepares a photo before the product
+  /// save has been validated; it must not delete the last committed photo.
   Future<ImportedProductImage> importProductImage(
     String? sourcePath, {
     String? previousPath,
     String? previousUrl,
   }) async {
     if (sourcePath == null || sourcePath.isEmpty) {
-      await storage?.deleteProductImage(previousPath);
-      await _deleteRemoteImage(previousUrl);
+      // Older local/cloud snapshots may still reference the previous image.
       return const ImportedProductImage(path: null, url: null);
     }
     if (sourcePath == previousPath || storage == null) {
@@ -475,8 +568,6 @@ class AppStore extends ChangeNotifier {
       return ImportedProductImage(path: sourcePath, url: url);
     }
     final imported = await storage!.importProductImage(sourcePath);
-    await storage!.deleteProductImage(previousPath);
-    await _deleteRemoteImage(previousUrl);
     final uploadedUrl = await _uploadImageIfLinked(imported);
     return ImportedProductImage(path: imported, url: uploadedUrl);
   }
@@ -489,16 +580,6 @@ class AppStore extends ChangeNotifier {
       return await sync.uploadImage(localPath, syncCode: code);
     } catch (_) {
       return null;
-    }
-  }
-
-  Future<void> _deleteRemoteImage(String? reference) async {
-    final sync = imageSync;
-    if (sync == null || reference == null || reference.isEmpty) return;
-    try {
-      await sync.deleteImage(reference);
-    } catch (_) {
-      // Best effort: an orphaned cloud file is harmless.
     }
   }
 
@@ -515,7 +596,7 @@ class AppStore extends ChangeNotifier {
     var uploaded = 0;
     var failed = 0;
     Object? firstError;
-    for (final product in products) {
+    for (final product in List<Product>.of(products)) {
       final current = product.imageUrl;
       final needsUpload =
           current == null ||
@@ -556,7 +637,23 @@ class AppStore extends ChangeNotifier {
     return uploaded;
   }
 
+  Future<String?> recordPaymentAndSave(Customer customer, double amount) async {
+    final validation = recordPayment(customer, amount);
+    if (validation != null) return validation;
+    final payment = customer.ledger.first;
+    final error = await _lastQueuedSave;
+    if (error != null) {
+      customer.ledger.remove(payment);
+      _revision++;
+      notifyListeners();
+    }
+    return error;
+  }
+
   String? recordPayment(Customer customer, double amount) {
+    if (!customers.contains(customer)) {
+      return 'Customer is no longer in this store.';
+    }
     if (!amount.isFinite || amount <= 0) {
       return 'Enter a valid payment greater than zero.';
     }
@@ -578,6 +675,41 @@ class AppStore extends ChangeNotifier {
     return null;
   }
 
+  Future<SaleRecord> completeSaleAndSave({
+    required PaymentType paymentType,
+    double amountReceived = 0,
+    Customer? customer,
+  }) async {
+    final lines = cartLines;
+    final sale = completeSale(
+      paymentType: paymentType,
+      amountReceived: amountReceived,
+      customer: customer,
+    );
+    final error = await _lastQueuedSave;
+    if (error == null) return sale;
+    sales.remove(sale);
+    if (paymentType == PaymentType.utang) {
+      customer?.ledger.removeWhere(
+        (entry) =>
+            entry.saleId == sale.id && entry.type == LedgerEntryType.credit,
+      );
+    }
+    for (final line in lines) {
+      if (!products.contains(line.product)) continue;
+      line.product.stock += line.quantity;
+      if (!line.product.isArchived) {
+        final quantity = (_cart[line.product.id] ?? 0) + line.quantity;
+        _cart[line.product.id] = quantity > line.product.stock
+            ? line.product.stock
+            : quantity;
+      }
+    }
+    _revision++;
+    notifyListeners();
+    throw StateError(error);
+  }
+
   SaleRecord completeSale({
     required PaymentType paymentType,
     double amountReceived = 0,
@@ -591,11 +723,24 @@ class AppStore extends ChangeNotifier {
     if (paymentType == PaymentType.cash && amountReceived < cartTotal) {
       throw StateError('The cash amount is insufficient.');
     }
-    if (paymentType == PaymentType.utang && customer == null) {
+    if (paymentType == PaymentType.utang &&
+        (customer == null || !customers.contains(customer))) {
       throw StateError('Select a customer for an utang sale.');
     }
 
+    final lines = cartLines;
+    if (lines.any(
+      (line) =>
+          line.product.isArchived ||
+          line.quantity <= 0 ||
+          line.quantity > line.product.stock ||
+          !line.product.price.isFinite ||
+          line.product.price < 0,
+    )) {
+      throw StateError('Stock or product details changed. Review the cart.');
+    }
     final total = cartTotal;
+    if (!total.isFinite) throw StateError('The cart total is invalid.');
     final now = DateTime.now();
     final sale = SaleRecord(
       id: _nextId(sales.map((sale) => sale.id)),
@@ -614,7 +759,9 @@ class AppStore extends ChangeNotifier {
       total: total,
       paymentType: paymentType,
       amountReceived: paymentType == PaymentType.cash ? amountReceived : 0,
-      change: paymentType == PaymentType.cash ? amountReceived - total : 0,
+      change: paymentType == PaymentType.cash
+          ? roundMoney(amountReceived - total)
+          : 0,
       customerId: customer?.id,
     );
 
@@ -663,7 +810,30 @@ class AppStore extends ChangeNotifier {
 
   /// Creates a brand-new cloud store from this phone's current data and
   /// returns the sync code other phones can use to join it.
-  Future<CloudSyncResult> startCloudSync() async {
+  Future<CloudSyncResult> startCloudSync() => _runSync(_startCloudSync);
+  Future<CloudSyncResult> joinCloudSync(String code) =>
+      _runSync(() => _joinCloudSync(code));
+  Future<CloudSyncResult> pushToCloud() => _runSync(_pushToCloud);
+  Future<CloudSyncResult> pullFromCloud() => _runSync(_pullFromCloud);
+
+  Future<CloudSyncResult> _runSync(
+    Future<CloudSyncResult> Function() operation,
+  ) async {
+    if (_syncInProgress) {
+      return const CloudSyncResult.failure(
+        'A sync operation is already in progress.',
+      );
+    }
+    if (_loadFailed) return CloudSyncResult.failure(storageError);
+    _syncInProgress = true;
+    try {
+      return await operation();
+    } finally {
+      _syncInProgress = false;
+    }
+  }
+
+  Future<CloudSyncResult> _startCloudSync() async {
     final cloud = cloudSync;
     if (cloud == null) {
       return const CloudSyncResult.failure('Cloud sync is not available.');
@@ -673,9 +843,10 @@ class AppStore extends ChangeNotifier {
       syncCode = code;
       lastSyncedAt = DateTime.now();
       notifyListeners();
-      await _saveNow();
+      final error = await _saveNow();
+      if (error != null) return CloudSyncResult.failure(error);
       // Creating the store first grants access to its private photo folder.
-      return await pushToCloud();
+      return await _pushToCloud();
     } catch (error) {
       return CloudSyncResult.failure('Could not start cloud sync: $error');
     }
@@ -683,7 +854,7 @@ class AppStore extends ChangeNotifier {
 
   /// Joins an existing cloud store using a code from another phone,
   /// replacing this phone's local data with the cloud copy.
-  Future<CloudSyncResult> joinCloudSync(String code) async {
+  Future<CloudSyncResult> _joinCloudSync(String code) async {
     final cloud = cloudSync;
     if (cloud == null) {
       return const CloudSyncResult.failure('Cloud sync is not available.');
@@ -693,18 +864,14 @@ class AppStore extends ChangeNotifier {
       return const CloudSyncResult.failure('Enter a sync code.');
     }
     try {
+      final revision = _revision;
       final remote = await cloud.downloadSnapshot(normalized, join: true);
       if (remote == null) {
         return const CloudSyncResult.failure(
           'No store was found for that sync code.',
         );
       }
-      _applyCloudSnapshot(remote.data);
-      await _hydrateMissingProductImages();
-      syncCode = normalized;
-      lastSyncedAt = remote.updatedAt ?? DateTime.now();
-      notifyListeners();
-      await _saveNow();
+      await _installCloudSnapshot(remote, revision, normalized);
       return CloudSyncResult.success(normalized, warning: photoSyncWarning);
     } catch (error) {
       return CloudSyncResult.failure('Could not join cloud sync: $error');
@@ -712,7 +879,7 @@ class AppStore extends ChangeNotifier {
   }
 
   /// Pushes this phone's current data to the cloud, overwriting it.
-  Future<CloudSyncResult> pushToCloud() async {
+  Future<CloudSyncResult> _pushToCloud() async {
     final cloud = cloudSync;
     final code = syncCode;
     if (cloud == null) {
@@ -731,7 +898,8 @@ class AppStore extends ChangeNotifier {
       );
       lastSyncedAt = uploadedAt;
       notifyListeners();
-      await _saveNow();
+      final error = await _saveNow();
+      if (error != null) return CloudSyncResult.failure(error);
       return CloudSyncResult.success(code, warning: photoSyncWarning);
     } catch (error) {
       return CloudSyncResult.failure('Could not upload to cloud: $error');
@@ -739,7 +907,7 @@ class AppStore extends ChangeNotifier {
   }
 
   /// Pulls the latest cloud data down, overwriting this phone's data.
-  Future<CloudSyncResult> pullFromCloud() async {
+  Future<CloudSyncResult> _pullFromCloud() async {
     final cloud = cloudSync;
     final code = syncCode;
     if (cloud == null) {
@@ -749,17 +917,14 @@ class AppStore extends ChangeNotifier {
       return const CloudSyncResult.failure('Set up sync first.');
     }
     try {
+      final revision = _revision;
       final remote = await cloud.downloadSnapshot(code);
       if (remote == null) {
         return const CloudSyncResult.failure(
           'No cloud data was found for this sync code.',
         );
       }
-      _applyCloudSnapshot(remote.data);
-      await _hydrateMissingProductImages();
-      lastSyncedAt = remote.updatedAt ?? DateTime.now();
-      notifyListeners();
-      await _saveNow();
+      await _installCloudSnapshot(remote, revision, code);
       return CloudSyncResult.success(code, warning: photoSyncWarning);
     } catch (error) {
       return CloudSyncResult.failure('Could not download from cloud: $error');
@@ -769,6 +934,22 @@ class AppStore extends ChangeNotifier {
   /// Clears this phone's store and photo cache. The cloud store and the
   /// device's owner login remain available so the code can be joined again.
   Future<String?> leaveCloudSync() async {
+    if (_syncInProgress) return 'A sync operation is already in progress.';
+    if (_loadFailed) return storageError;
+    _syncInProgress = true;
+    try {
+      return await _leaveCloudSync();
+    } finally {
+      _syncInProgress = false;
+    }
+  }
+
+  Future<String?> _leaveCloudSync() async {
+    final previous = _currentData();
+    final previousCart = Map<String, int>.of(_cart);
+    final previousCode = syncCode;
+    final previousTime = lastSyncedAt;
+    final previousWarning = photoSyncWarning;
     products.clear();
     customers.clear();
     sales.clear();
@@ -780,7 +961,15 @@ class AppStore extends ChangeNotifier {
     photoSyncWarning = null;
     notifyListeners();
     final error = await _saveNow();
-    if (error != null) return error;
+    if (error != null) {
+      _replaceData(previous);
+      _cart.addAll(previousCart);
+      syncCode = previousCode;
+      lastSyncedAt = previousTime;
+      photoSyncWarning = previousWarning;
+      notifyListeners();
+      return error;
+    }
     try {
       await storage?.clearProductImages();
       return null;
@@ -795,14 +984,14 @@ class AppStore extends ChangeNotifier {
   /// never had that photo locally, or on first launch after restoring an
   /// old local snapshot whose image files no longer exist. Failures are
   /// reported in [photoSyncWarning] and retried on the next sync.
-  Future<void> _hydrateMissingProductImages() async {
+  Future<void> _hydrateMissingProductImages({List<Product>? targets}) async {
     photoSyncWarning = null;
     final sync = imageSync;
     final localStorage = storage;
     if (sync == null || localStorage == null) return;
     var failed = 0;
     Object? firstError;
-    for (final product in products) {
+    for (final product in List<Product>.of(targets ?? products)) {
       final url = product.imageUrl;
       if (url == null || url.isEmpty) continue;
       final path = product.imagePath;
@@ -826,47 +1015,105 @@ class AppStore extends ChangeNotifier {
   /// Unlike [_restoreSnapshot] (used for local-disk loading at launch),
   /// this never touches the current login session or account name, since
   /// those are meant to stay tied to this specific phone.
-  void _applyCloudSnapshot(Map<String, dynamic> snapshot) {
-    final localPhotos = <String, String>{
-      for (final product in products)
-        if (product.imageUrl != null && product.imagePath != null)
-          product.imageUrl!: product.imagePath!,
-    };
+  _StoreData _decodeSnapshot(Map<String, dynamic> snapshot) {
+    validateStoreSnapshot(snapshot);
+    return (
+      products: _mapRows(snapshot['products']).map(_productFromRow).toList(),
+      customers: _mapRows(snapshot['customers']).map(_customerFromRow).toList(),
+      sales: _mapRows(snapshot['sales']).map(_saleFromRow).toList(),
+      additions: _mapRows(
+        snapshot['stock_additions'],
+      ).map(_stockAdditionFromRow).toList(),
+      markup:
+          (snapshot['markup_percent'] as num?)?.toDouble() ??
+          _defaultMarkupPercent,
+    );
+  }
+
+  _StoreData _currentData() => (
+    products: List.of(products),
+    customers: List.of(customers),
+    sales: List.of(sales),
+    additions: List.of(stockAdditions),
+    markup: markupPercent,
+  );
+
+  void _replaceData(_StoreData data) {
     products
       ..clear()
-      ..addAll(
-        _mapRows(snapshot['products']).map((row) {
-          final product = _productFromRow(row);
-          // A path from another phone is never a local photo cache.
-          product.imagePath = localPhotos[product.imageUrl];
-          return product;
-        }),
-      );
+      ..addAll(data.products);
     customers
       ..clear()
-      ..addAll(_mapRows(snapshot['customers']).map(_customerFromRow));
+      ..addAll(data.customers);
     sales
       ..clear()
-      ..addAll(_mapRows(snapshot['sales']).map(_saleFromRow));
+      ..addAll(data.sales);
     stockAdditions
       ..clear()
-      ..addAll(
-        _mapRows(snapshot['stock_additions']).map(_stockAdditionFromRow),
+      ..addAll(data.additions);
+    markupPercent = data.markup;
+  }
+
+  Future<void> _installCloudSnapshot(
+    CloudSnapshot remote,
+    int revision,
+    String code,
+  ) async {
+    final data = _decodeSnapshot(remote.data);
+    final localPhotos = <String, String>{
+      for (final p in products)
+        if (p.imageUrl != null && p.imagePath != null)
+          p.imageUrl!: p.imagePath!,
+    };
+    for (final p in data.products) {
+      // Paths from another phone are never accepted as local file paths.
+      p.imagePath = localPhotos[p.imageUrl];
+    }
+    final previousWarning = photoSyncWarning;
+    await _hydrateMissingProductImages(targets: data.products);
+    if (_revision != revision) {
+      photoSyncWarning = previousWarning;
+      throw const CloudSyncException(
+        'Local records changed during download. Retry when editing is finished.',
       );
-    final markup = snapshot['markup_percent'];
-    if (markup is num) markupPercent = markup.toDouble();
-    // The cart references product identities that may no longer match
-    // after a full data swap, so it's safest to clear it.
+    }
+    final previous = _currentData();
+    final previousCart = Map<String, int>.of(_cart);
+    final previousCode = syncCode;
+    final previousTime = lastSyncedAt;
+    _replaceData(data);
     _cart.clear();
+    syncCode = code;
+    lastSyncedAt = remote.updatedAt ?? DateTime.now();
+    final save = _saveNow();
+    final savedRevision = _revision;
+    final error = await save;
+    if (error != null) {
+      if (_revision == savedRevision) {
+        _replaceData(previous);
+        _cart.addAll(previousCart);
+        syncCode = previousCode;
+        lastSyncedAt = previousTime;
+        photoSyncWarning = previousWarning;
+      }
+      notifyListeners();
+      throw CloudSyncException(error);
+    }
+    notifyListeners();
   }
 
   bool _restoreSnapshot(Map<String, dynamic> snapshot) {
+    final data = _decodeSnapshot(snapshot);
     final version = (snapshot['version'] as num?)?.toInt() ?? 0;
     if (version < 1 || version > _dataVersion) {
       throw FormatException('Unsupported local data version: $version');
     }
 
     final account = snapshot['account'];
+    // Existing accounts predate onboarding and should not be interrupted.
+    _tutorialDismissed =
+        snapshot['tutorial_dismissed'] == true ||
+        (!snapshot.containsKey('tutorial_dismissed') && account is Map);
     if (account is Map && '${account['name']}'.trim().isNotEmpty) {
       _account = {'name': '${account['name']}'.trim()};
     } else {
@@ -878,25 +1125,14 @@ class AppStore extends ChangeNotifier {
         _defaultMarkupPercent;
     syncCode = snapshot['sync_code']?.toString();
     _themeChoice = ThemeChoice.fromName(snapshot['theme']);
+    _language = AppLanguage.fromCode(snapshot['language']);
     final lastSyncedRaw = snapshot['last_synced_at'];
     lastSyncedAt = lastSyncedRaw == null
         ? null
         : DateTime.tryParse('$lastSyncedRaw');
 
-    products
-      ..clear()
-      ..addAll(_mapRows(snapshot['products']).map(_productFromRow));
-    customers
-      ..clear()
-      ..addAll(_mapRows(snapshot['customers']).map(_customerFromRow));
-    sales
-      ..clear()
-      ..addAll(_mapRows(snapshot['sales']).map(_saleFromRow));
-    stockAdditions
-      ..clear()
-      ..addAll(
-        _mapRows(snapshot['stock_additions']).map(_stockAdditionFromRow),
-      );
+    _replaceData(data);
+    _cart.clear();
 
     // Authentication is intentionally session-only. Every fresh app launch
     // must pass the phone's system security prompt again.
@@ -913,7 +1149,9 @@ class AppStore extends ChangeNotifier {
   }
 
   Map<String, dynamic> _cloudSnapshot() => _snapshot()
+    ..remove('tutorial_dismissed')
     ..remove('theme')
+    ..remove('language')
     ..remove('account')
     ..remove('sync_code')
     ..remove('last_synced_at')
@@ -923,8 +1161,10 @@ class AppStore extends ChangeNotifier {
 
   Map<String, dynamic> _snapshot() => {
     'version': _dataVersion,
+    'tutorial_dismissed': _tutorialDismissed,
     'theme': _themeChoice.name,
-    'account': _account,
+    'language': _language.code,
+    'account': _account == null ? null : Map<String, dynamic>.of(_account!),
     'markup_percent': markupPercent,
     'sync_code': syncCode,
     'last_synced_at': lastSyncedAt?.toIso8601String(),
@@ -1069,24 +1309,34 @@ class AppStore extends ChangeNotifier {
   };
 
   void _queueSave() {
-    if (storage == null) return;
-    _persistenceQueue = _persistenceQueue.then((_) async {
-      try {
-        await storage!.saveSnapshot(_snapshot());
-        storageError = null;
-      } catch (error) {
-        storageError = 'Local data could not be saved: $error';
-      }
-      notifyListeners();
-    });
-    unawaited(_persistenceQueue);
+    _lastQueuedSave = _saveNow();
+    unawaited(_lastQueuedSave);
   }
 
-  Future<String?> _saveNow() async {
-    if (storage == null) return null;
-    _queueSave();
-    await _persistenceQueue;
-    return storageError;
+  Future<String?> _saveNow() {
+    _revision++;
+    if (_loadFailed) {
+      return Future.value(
+        storageError ?? 'Resolve the local data loading error before saving.',
+      );
+    }
+    if (storage == null) return Future.value(null);
+    // Capture the state for this operation, not whichever state exists later.
+    final snapshot = _snapshot();
+    final save = _persistenceQueue.then<String?>((_) async {
+      String? errorMessage;
+      try {
+        await storage!.saveSnapshot(snapshot);
+        storageError = null;
+      } catch (error) {
+        errorMessage = 'Local data could not be saved: $error';
+        storageError = errorMessage;
+      }
+      notifyListeners();
+      return errorMessage;
+    });
+    _persistenceQueue = save.then<void>((_) {});
+    return save;
   }
 
   String _nextId(Iterable<String> ids) {

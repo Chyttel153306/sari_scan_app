@@ -1,3 +1,4 @@
+import '../l10n/app_localizations.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -17,6 +18,19 @@ class SalesTrendChart extends StatefulWidget {
 class _SalesTrendChartState extends State<SalesTrendChart> {
   final _scrollController = ScrollController();
   int? _selected;
+
+  @override
+  void didUpdateWidget(covariant SalesTrendChart oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_selected != null &&
+        (_selected! >= widget.points.length ||
+            oldWidget.points[_selected!].start !=
+                widget.points[_selected!].start ||
+            oldWidget.points[_selected!].end !=
+                widget.points[_selected!].end)) {
+      _selected = null;
+    }
+  }
 
   @override
   void dispose() {
@@ -44,7 +58,7 @@ class _SalesTrendChartState extends State<SalesTrendChart> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Sales (PHP) • Cash + Utang'),
+        Text(context.tr("Sales (PHP) • Cash + Utang")),
         const SizedBox(height: 12),
         LayoutBuilder(
           builder: (context, constraints) {
@@ -263,7 +277,9 @@ class _SalesTrendChartState extends State<SalesTrendChart> {
         ),
         Text(
           selected == null
-              ? 'Swipe to see all periods. Tap a bar for the exact amount.'
+              ? context.tr(
+                  "Swipe to see all periods. Tap a bar for the exact amount.",
+                )
               : '${selected.label.replaceAll('\n', ' ')}: ${money(selected.value)}',
           style: Theme.of(context).textTheme.bodySmall,
         ),

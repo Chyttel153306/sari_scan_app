@@ -57,6 +57,7 @@ void main() {
       final store = AppStore();
       addTearDown(store.dispose);
       await store.openSecureSession('Owner');
+      await store.dismissTutorial();
       await tester.pumpWidget(SariScanApp(store: store));
       await tester.tap(find.byTooltip('Store account'));
       await tester.pumpAndSettle();

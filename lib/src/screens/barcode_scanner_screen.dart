@@ -1,3 +1,4 @@
+import '../l10n/app_localizations.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -46,7 +47,9 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
     if (!mounted || normalized.isEmpty || _returningResult) return;
     _returningResult = true;
     // Feedback must not delay delivery of the barcode.
-    unawaited(HapticFeedback.mediumImpact().onError<PlatformException>((_, _) {}));
+    unawaited(
+      HapticFeedback.mediumImpact().onError<PlatformException>((_, _) {}),
+    );
     try {
       await _scannerController.stop();
     } on MobileScannerException {
@@ -76,7 +79,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
           onPressed: () => Navigator.pop(context),
           icon: const Icon(Icons.close_rounded),
         ),
-        title: const Text('Scan Barcode'),
+        title: Text(context.tr("Scan Barcode")),
         actions: [_TorchButton(controller: _scannerController)],
       ),
       body: Column(
@@ -110,8 +113,12 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
                               child: Text(
                                 error.errorCode ==
                                         MobileScannerErrorCode.permissionDenied
-                                    ? 'Camera permission was denied. Enable it in your phone settings, or enter the barcode manually.'
-                                    : 'The camera could not start. You can still enter the barcode manually.',
+                                    ? context.tr(
+                                        "Camera permission was denied. Enable it in your phone settings, or enter the barcode manually.",
+                                      )
+                                    : context.tr(
+                                        "The camera could not start. You can still enter the barcode manually.",
+                                      ),
                                 textAlign: TextAlign.center,
                                 style: const TextStyle(color: Colors.white),
                               ),
@@ -144,8 +151,8 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
                           color: Colors.black.withValues(alpha: 0.68),
                           borderRadius: BorderRadius.circular(99),
                         ),
-                        child: const Text(
-                          'Point the camera at a product barcode',
+                        child: Text(
+                          context.tr("Point the camera at a product barcode"),
                           style: TextStyle(color: Colors.white),
                         ),
                       ),
@@ -171,8 +178,8 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
                               keyboardType: TextInputType.text,
                               autocorrect: false,
                               enableSuggestions: false,
-                              decoration: const InputDecoration(
-                                labelText: 'Barcode number',
+                              decoration: InputDecoration(
+                                labelText: context.tr("Barcode number"),
                               ),
                               onSubmitted: _returnResult,
                             ),
@@ -192,8 +199,8 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
                         ),
                         onPressed: () => setState(() => _manualEntry = true),
                         icon: const Icon(Icons.keyboard_alt_outlined),
-                        label: const Text(
-                          'Enter Manually',
+                        label: Text(
+                          context.tr("Enter Manually"),
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
@@ -223,7 +230,7 @@ class _TorchButton extends StatelessWidget {
           return const SizedBox(width: 48);
         }
         return IconButton(
-          tooltip: 'Toggle flashlight',
+          tooltip: context.tr("Toggle flashlight"),
           onPressed: state.torchState == TorchState.unavailable
               ? null
               : controller.toggleTorch,
