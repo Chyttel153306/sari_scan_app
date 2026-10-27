@@ -27,12 +27,11 @@ class Product {
   double price;
   int stock;
   double? costPrice;
+  /// Photo file on this phone; excluded from cloud snapshots.
   String? imagePath;
 
-  /// Public ImgBB URL for this product's photo, if it was uploaded during
-  /// [AppStore.importProductImage]. Carried in the synced snapshot so
-  /// other phones can re-download the photo — [imagePath] alone only
-  /// ever resolves on the phone that originally took the picture.
+  /// Private Supabase Storage path, or a legacy web URL. Included in cloud
+  /// snapshots so other phones can download the photo into local storage.
   String? imageUrl;
   String barcode;
   int lowStockThreshold;
@@ -143,6 +142,7 @@ class Customer {
   String phone;
   final List<LedgerEntry> ledger;
 
+  /// Calculates unpaid utang from saved credits minus repayments.
   double get balance => roundMoney(
     ledger.fold<double>(
       0,

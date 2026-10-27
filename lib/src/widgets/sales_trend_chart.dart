@@ -288,6 +288,7 @@ class _SalesTrendChartState extends State<SalesTrendChart> {
   }
 }
 
+/// Formats chart values with k, M, or B suffixes for compact display.
 String compactAmount(double value) {
   if (value.abs() >= 1000000000) {
     return '${(value / 1000000000).toStringAsFixed(1)}B';

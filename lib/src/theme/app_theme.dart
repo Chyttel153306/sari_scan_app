@@ -74,6 +74,7 @@ class AppTheme {
       Theme.of(context).extension<AppPalette>() ??
       AppPalette.forChoice(ThemeChoice.defaultTheme);
 
+  /// Builds the app's visual theme from the selected device preference.
   static ThemeData forChoice(ThemeChoice choice) {
     final palette = AppPalette.forChoice(choice);
     final scheme = palette.scheme;

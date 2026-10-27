@@ -1,4 +1,5 @@
-/// Validate the complete snapshot before touching live store state.
+/// Checks local or downloaded JSON before it becomes live store records.
+/// Throws FormatException for invalid data without saving or changing the store.
 /// Historical sales may reference products that have since been deleted.
 void validateStoreSnapshot(Map<String, dynamic> snapshot) {
   final version = snapshot['version'];

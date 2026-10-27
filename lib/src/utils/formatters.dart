@@ -1,3 +1,4 @@
+/// Formats a number as peso text for screens and receipts.
 String money(num value) {
   final parts = value.toStringAsFixed(2).split('.');
   final whole = parts.first.replaceAllMapped(
@@ -7,6 +8,7 @@ String money(num value) {
   return '₱$whole${parts.length > 1 ? '.${parts[1]}' : ''}';
 }
 
+/// Formats the supplied date and time without converting its timezone.
 String shortDateTime(DateTime value) {
   final month = value.month.toString().padLeft(2, '0');
   final day = value.day.toString().padLeft(2, '0');
@@ -16,4 +18,5 @@ String shortDateTime(DateTime value) {
   return '${value.year}-$month-$day $hourValue:$minute $period';
 }
 
+/// Formats a sale ID as the receipt label used on screen and in exported PDFs.
 String receiptNumber(String id) => 'SS-${id.padLeft(6, '0')}';

@@ -32,6 +32,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
     });
   }
 
+  /// Takes the first non-empty camera barcode and forwards its text to the caller.
   void _onDetect(BarcodeCapture capture) {
     if (!mounted || _manualEntry || _returningResult) return;
     for (final barcode in capture.barcodes) {
@@ -42,6 +43,8 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
     }
   }
 
+  /// Stops scanning and returns normalized barcode text through navigation.
+  /// This screen does not save products or send barcode data to a server.
   Future<void> _returnResult(String value) async {
     final normalized = normalizeBarcode(value);
     if (!mounted || normalized.isEmpty || _returningResult) return;

@@ -23,6 +23,7 @@ class ReportsScreen extends StatefulWidget {
 class _ReportsScreenState extends State<ReportsScreen> {
   ReportPeriod _period = ReportPeriod.today;
 
+  /// Returns the localized display label for the selected report period.
   String _label(ReportPeriod period) {
     return switch (period) {
       ReportPeriod.today => 'Today',

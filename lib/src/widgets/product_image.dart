@@ -19,6 +19,7 @@ class ProductImage extends StatelessWidget {
   final int? cacheHeight;
 
   @override
+  /// Reads the supplied local photo file for display, with a placeholder on failure.
   Widget build(BuildContext context) {
     final path = imagePath;
     if (path == null || path.isEmpty) return _placeholder(context);

@@ -41,6 +41,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ? value.toStringAsFixed(0)
       : value.toStringAsFixed(1);
 
+  /// Shows the result of a settings operation in a snackbar.
   void _feedback(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
@@ -48,6 +49,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
+  /// Copies this store's pairing code to the device clipboard.
   Future<void> _copySyncCode() async {
     try {
       await Clipboard.setData(ClipboardData(text: widget.store.syncCode!));
@@ -59,6 +61,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  /// Sends the chosen language to AppStore for saving on this phone.
   Future<void> _chooseLanguage() async {
     final language = await showModalBottomSheet<AppLanguage>(
       context: context,
@@ -112,6 +115,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _feedback(error ?? context.tr('Language saved.'));
   }
 
+  /// Sends the chosen theme to AppStore for saving on this phone.
   Future<void> _chooseTheme() async {
     final choice = await showModalBottomSheet<ThemeChoice>(
       context: context,
@@ -191,6 +195,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  /// Opens markup editing; the dialog saves its value through AppStore.
   Future<void> _editMarkup() async {
     final saved = await showDialog<bool>(
       context: context,
@@ -202,6 +207,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  /// Displays supplied information without reading or saving store records.
   Future<void> _showInfo(String title, List<Widget> content) =>
       showDialog<void>(
         context: context,
@@ -221,6 +227,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       );
 
+  /// Confirms before clearing the session and cart; local records stay saved.
   Future<void> _confirmLogout() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -249,6 +256,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
+  /// Sends the dialog's returned name to AppStore for local saving.
   Future<void> _changeName() async {
     final newName = await showDialog<String>(
       context: context,
@@ -306,6 +314,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // Cloud sync
   // -----------------------------------------------------------------
 
+  /// Offers manual create, join, upload, download, and unlink actions.
   Future<void> _openSyncSheet() async {
     final linked = widget.store.syncCode != null;
     final action = await showModalBottomSheet<_SyncAction>(
@@ -434,6 +443,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  /// Confirms a sync action, runs its AppStore operation, and displays the result.
   Future<void> _confirmAndRun({
     required String title,
     required String message,
@@ -480,6 +490,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  /// Confirms replacement before downloading the entered code's store data.
   Future<void> _promptJoinCode() async {
     final code = await showDialog<String>(
       context: context,
@@ -553,6 +564,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  /// Confirms before clearing this phone's records and photos through AppStore.
   Future<void> _confirmLeave() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -1077,6 +1089,7 @@ class _MarkupDialogState extends State<_MarkupDialog> {
     super.dispose();
   }
 
+  /// Checks for unsaved markup edits before dismissing the dialog.
   Future<void> _close() async {
     if (_saving || _confirmingDiscard) return;
     if (_dirty) {
@@ -1108,6 +1121,7 @@ class _MarkupDialogState extends State<_MarkupDialog> {
     });
   }
 
+  /// Validates the markup and waits for AppStore to save it locally.
   Future<void> _save() async {
     final value = _value;
     if (value == null ||
@@ -1392,6 +1406,7 @@ class _JoinSyncCodeDialogState extends State<_JoinSyncCodeDialog> {
     super.dispose();
   }
 
+  /// Returns the typed sync code to the caller; joining happens outside this dialog.
   void _submit() {
     Navigator.pop(context, _controller.text);
   }

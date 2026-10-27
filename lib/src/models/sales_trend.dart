@@ -14,6 +14,7 @@ class SalesTrendPoint {
   final double value;
 }
 
+/// Returns the local start of a report period; weeks begin on Monday.
 DateTime reportStart(ReportPeriod period, DateTime reference) {
   final local = reference.toLocal();
   return switch (period) {
@@ -28,6 +29,7 @@ DateTime reportStart(ReportPeriod period, DateTime reference) {
   };
 }
 
+/// Groups supplied sales into time buckets for the chart without saving data.
 List<SalesTrendPoint> buildSalesTrend(
   ReportPeriod period,
   Iterable<SaleRecord> sales, {

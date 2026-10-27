@@ -35,6 +35,7 @@ class _PosScreenState extends State<PosScreen> {
     super.dispose();
   }
 
+  /// Filters supplied catalog records locally by category, name, and barcode.
   List<Product> _filterProducts(List<Product> products) {
     final query = _query.trim().toLowerCase();
     return products.where((product) {
@@ -48,6 +49,7 @@ class _PosScreenState extends State<PosScreen> {
     }).toList();
   }
 
+  /// Looks up the scanned code locally, offers product creation, then adds to cart.
   Future<void> _openBarcodeEntry() async {
     final barcode = await Navigator.push<String>(
       context,
@@ -96,6 +98,7 @@ class _PosScreenState extends State<PosScreen> {
     _addScannedProduct(product);
   }
 
+  /// Adds the matched product to AppStore's in-memory cart and reports stock limits.
   void _addScannedProduct(Product product) {
     final previousCount = widget.store.cartItemCount;
     widget.store.addToCart(product);
@@ -116,6 +119,7 @@ class _PosScreenState extends State<PosScreen> {
     );
   }
 
+  /// Opens the cart using the shared store so quantity changes reach checkout.
   Future<void> _openCart() async {
     await showModalBottomSheet<void>(
       context: context,

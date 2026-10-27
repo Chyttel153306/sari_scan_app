@@ -12,6 +12,7 @@ class AppLanguageScope extends InheritedWidget {
   });
   final AppLanguage language;
 
+  /// Reads the widget tree's language, defaulting to English.
   static AppLanguage of(BuildContext context) =>
       context
           .dependOnInheritedWidgetOfExactType<AppLanguageScope>()
@@ -28,6 +29,7 @@ class AppStrings {
   const AppStrings(this.language);
   final AppLanguage language;
 
+  /// Looks up bundled translations and inserts display values without a network call.
   String tr(String message, {List<Object?> args = const []}) {
     final translation = appTranslations[message];
     final result = switch (language) {

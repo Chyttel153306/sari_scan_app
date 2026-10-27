@@ -26,6 +26,7 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
     super.dispose();
   }
 
+  /// Sends validated contact details to AppStore and returns the new customer.
   void _submit() {
     if (_submitted || !(_formKey.currentState?.validate() ?? false)) return;
     _submitted = true;

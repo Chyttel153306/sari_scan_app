@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+/// Returns the shared catalog price text style from the active theme.
 TextStyle productPriceStyle(BuildContext context) =>
     Theme.of(context).textTheme.titleLarge!.copyWith(
       fontFamily: 'SpaceGrotesk',

@@ -33,6 +33,7 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  /// Validates the local owner name, verifies phone security, then opens the session.
   Future<void> _submit() async {
     if (_submitting) return;
     if (!(_formKey.currentState?.validate() ?? false)) return;
@@ -73,6 +74,7 @@ class _LoginScreenState extends State<LoginScreen> {
     });
   }
 
+  /// Verifies phone security before displaying the owner name saved on this phone.
   Future<void> _forgotName() async {
     if (_submitting) return;
     setState(() {
@@ -122,6 +124,7 @@ class _LoginScreenState extends State<LoginScreen> {
     });
   }
 
+  /// Verifies phone security and sends the edited owner name to local persistence.
   Future<void> _changeName() async {
     if (_submitting) return;
     setState(() {
@@ -407,10 +410,12 @@ class _ChangeNameDialogState extends State<ChangeNameDialog> {
     super.dispose();
   }
 
+  /// Closes the name dialog without returning a replacement name.
   void _cancel() {
     Navigator.of(context).pop();
   }
 
+  /// Returns a validated name to the caller; the caller handles persistence.
   void _save() {
     if (!(_formKey.currentState?.validate() ?? false)) {
       return;

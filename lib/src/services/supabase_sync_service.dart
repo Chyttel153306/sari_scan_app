@@ -13,16 +13,14 @@ class CloudSyncException implements Exception {
 
 /// Lets multiple phones share the same SariScan store data through
 /// Supabase, without changing anything about how [LocalStorageService]
-/// works. The phone always works fully offline; this service is only ever
-/// touched when the owner taps the Sync button in Settings.
+/// works. Store snapshot uploads and downloads are requested from Settings.
 ///
 /// Data model: every store gets a short, human-shareable "sync code"
 /// (e.g. "7F3KQ9PL"). Sign-in is anonymous — there is no email/password
 /// step for the owner — and Supabase's Row Level Security only lets a
 /// signed-in identity read a store after it has joined that store with the
-/// code. All reads and writes go through the RPC functions defined in
-/// `sariscan_supabase_setup.sql`, which exchange the same snapshot JSON the
-/// app has always produced.
+/// code. Snapshot JSON goes to Supabase through the `create_store`,
+/// `join_store`, `push_snapshot`, and `pull_snapshot` RPCs.
 class SupabaseSyncService {
   SupabaseSyncService({
     SupabaseClient? client,
@@ -32,6 +30,7 @@ class SupabaseSyncService {
   final SupabaseClient _client;
   final Duration requestTimeout;
 
+  /// Sends parameters to a Supabase database function with a request timeout.
   Future<dynamic> _rpc(
     String function, {
     required Map<String, dynamic> params,
@@ -40,6 +39,7 @@ class SupabaseSyncService {
   static const _notFound = 'P0002';
   static const _notMember = '42501';
 
+  /// Creates an anonymous Supabase session if this device has no active session.
   Future<void> _ensureSignedIn() async {
     if (_client.auth.currentSession != null) return;
     try {
@@ -51,6 +51,7 @@ class SupabaseSyncService {
     }
   }
 
+  /// Converts Supabase database errors into messages returned to the UI.
   CloudSyncException _friendly(PostgrestException error) {
     if (error.code == _notFound) {
       return const CloudSyncException(

@@ -24,6 +24,7 @@ class _UtangScreenState extends State<UtangScreen> {
   String _query = '';
   String _filter = 'All';
 
+  /// Filters and sorts local customer records for the utang list.
   List<Customer> get _customers {
     final query = _query.toLowerCase();
     return widget.store.customers
@@ -37,6 +38,7 @@ class _UtangScreenState extends State<UtangScreen> {
       ..sort((a, b) => b.balance.compareTo(a.balance));
   }
 
+  /// Opens customer creation using the shared AppStore and its local save queue.
   Future<void> _addCustomer() async {
     final customer = await showDialog<Customer>(
       context: context,
@@ -301,6 +303,7 @@ class CustomerLedgerScreen extends StatelessWidget {
   final AppStore store;
   final Customer customer;
 
+  /// Collects a repayment and waits for AppStore to save the customer's ledger locally.
   Future<void> _recordPayment(BuildContext context) async {
     final controller = TextEditingController();
     String? error;

@@ -79,6 +79,7 @@ class _GuidedTutorialState extends State<GuidedTutorial> {
     ),
   ];
 
+  /// Measures the active widget target after layout to position the tutorial spotlight.
   void _measure() {
     if (_scheduled) return;
     _scheduled = true;
@@ -99,6 +100,7 @@ class _GuidedTutorialState extends State<GuidedTutorial> {
     });
   }
 
+  /// Changes the tour step and tells the parent which app tab to show.
   void _go(int step) {
     if (_cardScroll.hasClients) _cardScroll.jumpTo(0);
     widget.onStepChanged(step);

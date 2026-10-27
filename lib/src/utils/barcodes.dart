@@ -14,6 +14,7 @@ String barcodeKey(String value) {
   return code.length == 12 ? '0$code' : code;
 }
 
+/// Matches a local catalog barcode by text or equivalent UPC/EAN code.
 bool matchesBarcodeSearch(String barcode, String query) {
   final normalized = normalizeBarcode(query);
   if (normalized.isEmpty) return false;

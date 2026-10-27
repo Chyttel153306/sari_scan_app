@@ -47,6 +47,9 @@ typedef _StoreData = ({
   double markup,
 });
 
+/// Holds live app data. Changes are saved to LocalStorageService; Settings
+/// actions exchange store snapshots with SupabaseSyncService. Photo files
+/// use SupabaseImageService separately from the snapshot JSON.
 class AppStore extends ChangeNotifier {
   AppStore({
     List<Product>? products,
@@ -59,6 +62,7 @@ class AppStore extends ChangeNotifier {
        customers = customers ?? [],
        markupPercent = markupPercent ?? _defaultMarkupPercent;
 
+  /// Creates the store with local persistence and optional cloud services.
   factory AppStore.forApp({
     LocalStorageService? storage,
     SupabaseSyncService? cloudSync,
@@ -125,6 +129,7 @@ class AppStore extends ChangeNotifier {
   bool _tutorialDismissed = false;
   bool get needsFirstUseTutorial => !_tutorialDismissed;
 
+  /// Saves this phone's completed tutorial preference.
   Future<String?> dismissTutorial() async {
     _tutorialDismissed = true;
     notifyListeners();
@@ -161,13 +166,16 @@ class AppStore extends ChangeNotifier {
     super.dispose();
   }
 
+  /// Returns in-memory products available for sale.
   List<Product> get activeProducts =>
       products.where((product) => !product.isArchived).toList();
 
+  /// Returns saved stock-in records for the product's inventory history.
   List<StockAddition> stockAdditionsFor(Product product) => stockAdditions
       .where((addition) => addition.productId == product.id)
       .toList();
 
+  /// Combines in-memory cart quantities with current product records.
   List<CartLine> get cartLines => _cart.entries
       .map(
         (entry) => CartLine(
@@ -184,6 +192,7 @@ class AppStore extends ChangeNotifier {
     cartLines.fold<double>(0, (total, line) => total + line.subtotal),
   );
 
+  /// Sums customer ledger balances for the total unpaid utang.
   double get totalOutstanding =>
       customers.fold(0, (total, customer) => total + customer.balance);
 
@@ -192,6 +201,7 @@ class AppStore extends ChangeNotifier {
   double suggestedSellingPrice(double costPrice) =>
       costPrice * (1 + markupPercent / 100);
 
+  /// Loads local JSON into the store, saves migrations, and restores missing photos.
   Future<void> initialize() async {
     if (storage == null) return;
     isLoading = true;
@@ -214,6 +224,7 @@ class AppStore extends ChangeNotifier {
     }
   }
 
+  /// Downloads missing photos to local storage and saves their new local paths.
   Future<void> _restorePhotosInBackground() async {
     final previous = {for (final p in products) p: p.imagePath};
     try {
@@ -233,6 +244,7 @@ class AppStore extends ChangeNotifier {
     }
   }
 
+  /// Checks entered text against the owner name stored on this phone.
   String? validateOwnerName(String name) {
     final normalized = name.trim();
     if (normalized.isEmpty) return 'Enter your name.';
@@ -244,6 +256,8 @@ class AppStore extends ChangeNotifier {
     return null;
   }
 
+  /// Saves the owner name locally and opens an in-memory session on success.
+  /// The caller must complete phone authentication before calling this.
   Future<String?> openSecureSession(String name) async {
     final validation = validateOwnerName(name);
     if (validation != null) return validation;
@@ -260,6 +274,7 @@ class AppStore extends ChangeNotifier {
     return error;
   }
 
+  /// Saves the new owner name locally and restores the old name if saving fails.
   Future<String?> renameOwner(String name) async {
     final normalized = name.trim();
     if (normalized.isEmpty) return 'Enter a store name.';
@@ -293,6 +308,7 @@ class AppStore extends ChangeNotifier {
     return error;
   }
 
+  /// Applies and saves this phone's theme; restores it if the save fails.
   Future<String?> updateTheme(ThemeChoice choice) async {
     final previous = _themeChoice;
     _themeChoice = choice;
@@ -318,6 +334,7 @@ class AppStore extends ChangeNotifier {
     return error;
   }
 
+  /// Clears the session and in-memory cart while retaining saved records.
   Future<void> logout() async {
     _revision++;
     currentUserName = null;
@@ -325,6 +342,7 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Adds one unit to the in-memory cart, limited by available stock.
   void addToCart(Product product) {
     if (product.isArchived || !products.contains(product)) return;
     final current = _cart[product.id] ?? 0;
@@ -334,6 +352,7 @@ class AppStore extends ChangeNotifier {
     super.notifyListeners();
   }
 
+  /// Reduces the in-memory cart quantity and removes empty lines.
   void removeOneFromCart(Product product) {
     final current = _cart[product.id] ?? 0;
     if (current <= 1) {
@@ -345,12 +364,14 @@ class AppStore extends ChangeNotifier {
     super.notifyListeners();
   }
 
+  /// Removes the product's entire line from the in-memory cart.
   void removeFromCart(Product product) {
     _cart.remove(product.id);
     _revision++;
     super.notifyListeners();
   }
 
+  /// Searches active products locally by exact or equivalent retail barcode.
   Product? findByBarcode(String barcode, {Product? excluding}) {
     final normalized = normalizeBarcode(barcode);
     if (normalized.isEmpty) return null;
@@ -370,6 +391,8 @@ class AppStore extends ChangeNotifier {
     return null;
   }
 
+  /// Validates product values, updates inventory, and queues a local JSON save.
+  /// Photo copying and upload happen separately before this call.
   Product saveProduct({
     Product? existing,
     required String name,
@@ -507,6 +530,7 @@ class AppStore extends ChangeNotifier {
     return addition;
   }
 
+  /// Changes availability, removes the cart line, and queues a local save.
   String? toggleArchive(Product product) {
     if (product.isArchived &&
         findByBarcode(product.barcode, excluding: product) != null) {
@@ -519,6 +543,7 @@ class AppStore extends ChangeNotifier {
     return null;
   }
 
+  /// Removes inventory and cart entries and queues a local save; history is kept.
   void deleteProduct(Product product) {
     _cart.remove(product.id);
     products.removeWhere((item) => item.id == product.id);
@@ -527,6 +552,7 @@ class AppStore extends ChangeNotifier {
     _queueSave();
   }
 
+  /// Adds customer contact details and queues a local snapshot save.
   Customer addCustomer(String name, String phone) {
     final customer = Customer(
       id: _nextId(customers.map((customer) => customer.id)),
@@ -572,6 +598,7 @@ class AppStore extends ChangeNotifier {
     return ImportedProductImage(path: imported, url: uploadedUrl);
   }
 
+  /// Uploads a local photo to the linked Supabase folder, or returns null on failure.
   Future<String?> _uploadImageIfLinked(String localPath) async {
     final sync = imageSync;
     final code = syncCode;
@@ -637,6 +664,7 @@ class AppStore extends ChangeNotifier {
     return uploaded;
   }
 
+  /// Waits for the local payment save and removes the new ledger entry if it fails.
   Future<String?> recordPaymentAndSave(Customer customer, double amount) async {
     final validation = recordPayment(customer, amount);
     if (validation != null) return validation;
@@ -650,6 +678,7 @@ class AppStore extends ChangeNotifier {
     return error;
   }
 
+  /// Adds a validated repayment to the customer's ledger and queues a local save.
   String? recordPayment(Customer customer, double amount) {
     if (!customers.contains(customer)) {
       return 'Customer is no longer in this store.';
@@ -675,6 +704,7 @@ class AppStore extends ChangeNotifier {
     return null;
   }
 
+  /// Waits for checkout to save locally; restores stock, cart, and ledger on failure.
   Future<SaleRecord> completeSaleAndSave({
     required PaymentType paymentType,
     double amountReceived = 0,
@@ -710,6 +740,8 @@ class AppStore extends ChangeNotifier {
     throw StateError(error);
   }
 
+  /// Converts the cart into sale history, reduces stock, and records any utang debt.
+  /// Clears the cart and queues all changed records for local persistence.
   SaleRecord completeSale({
     required PaymentType paymentType,
     double amountReceived = 0,
@@ -790,6 +822,7 @@ class AppStore extends ChangeNotifier {
     return sale;
   }
 
+  /// Filters in-memory sale history for the report period and reference time.
   List<SaleRecord> salesFor(ReportPeriod period, {DateTime? now}) {
     final reference = now ?? DateTime.now();
     final start = reportStart(period, reference);
@@ -803,19 +836,22 @@ class AppStore extends ChangeNotifier {
   }
 
   // ---------------------------------------------------------------------
-  // Cloud sync (Supabase). All of these are manual, triggered only from
-  // the Sync button in Settings — nothing here runs automatically, and
-  // the app works fully offline whether or not any of this is ever used.
+  // Store snapshot sync is manual from Settings. Photo uploads can also run
+  // when saving a product, and missing photos can download during startup.
   // ---------------------------------------------------------------------
 
   /// Creates a brand-new cloud store from this phone's current data and
   /// returns the sync code other phones can use to join it.
   Future<CloudSyncResult> startCloudSync() => _runSync(_startCloudSync);
+  /// Joins by code and replaces local store records with the cloud snapshot.
   Future<CloudSyncResult> joinCloudSync(String code) =>
       _runSync(() => _joinCloudSync(code));
+  /// Replaces the linked cloud snapshot with this phone's store records.
   Future<CloudSyncResult> pushToCloud() => _runSync(_pushToCloud);
+  /// Replaces this phone's store records with the linked cloud snapshot.
   Future<CloudSyncResult> pullFromCloud() => _runSync(_pullFromCloud);
 
+  /// Runs one snapshot sync at a time and blocks sync after local loading fails.
   Future<CloudSyncResult> _runSync(
     Future<CloudSyncResult> Function() operation,
   ) async {
@@ -833,6 +869,7 @@ class AppStore extends ChangeNotifier {
     }
   }
 
+  /// Creates the cloud snapshot, saves the code locally, then uploads photos and records.
   Future<CloudSyncResult> _startCloudSync() async {
     final cloud = cloudSync;
     if (cloud == null) {
@@ -944,6 +981,8 @@ class AppStore extends ChangeNotifier {
     }
   }
 
+  /// Clears and saves local records, then removes cached photos; cloud data is kept.
+  /// Restores prior records if the local save fails.
   Future<String?> _leaveCloudSync() async {
     final previous = _currentData();
     final previousCart = Map<String, int>.of(_cart);
@@ -1011,10 +1050,8 @@ class AppStore extends ChangeNotifier {
     }
   }
 
-  /// Applies a downloaded cloud snapshot on top of this phone's data.
-  /// Unlike [_restoreSnapshot] (used for local-disk loading at launch),
-  /// this never touches the current login session or account name, since
-  /// those are meant to stay tied to this specific phone.
+  /// Validates local or cloud JSON and returns model lists without changing
+  /// live state. The caller decides when to install the decoded records.
   _StoreData _decodeSnapshot(Map<String, dynamic> snapshot) {
     validateStoreSnapshot(snapshot);
     return (
@@ -1030,6 +1067,7 @@ class AppStore extends ChangeNotifier {
     );
   }
 
+  /// Copies the current lists for rollback; the model objects are shared.
   _StoreData _currentData() => (
     products: List.of(products),
     customers: List.of(customers),
@@ -1038,6 +1076,7 @@ class AppStore extends ChangeNotifier {
     markup: markupPercent,
   );
 
+  /// Replaces in-memory record lists and markup; the caller handles persistence.
   void _replaceData(_StoreData data) {
     products
       ..clear()
@@ -1054,6 +1093,8 @@ class AppStore extends ChangeNotifier {
     markupPercent = data.markup;
   }
 
+  /// Validates cloud records, caches photos, and saves the replacement locally.
+  /// Rejects concurrent edits and restores prior state when the save fails.
   Future<void> _installCloudSnapshot(
     CloudSnapshot remote,
     int revision,
@@ -1102,6 +1143,7 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Restores local records and device preferences; requires a fresh login session.
   bool _restoreSnapshot(Map<String, dynamic> snapshot) {
     final data = _decodeSnapshot(snapshot);
     final version = (snapshot['version'] as num?)?.toInt() ?? 0;
@@ -1140,6 +1182,7 @@ class AppStore extends ChangeNotifier {
     return version < _dataVersion;
   }
 
+  /// Converts snapshot list entries to typed maps for model decoding.
   List<Map<String, dynamic>> _mapRows(Object? value) {
     if (value is! List) return const [];
     return value
@@ -1148,6 +1191,8 @@ class AppStore extends ChangeNotifier {
         .toList();
   }
 
+  /// Builds upload JSON without device settings, account, pairing, or local paths.
+  /// Includes products, customers and ledgers, sales, stock additions, and markup.
   Map<String, dynamic> _cloudSnapshot() => _snapshot()
     ..remove('tutorial_dismissed')
     ..remove('theme')
@@ -1159,6 +1204,8 @@ class AppStore extends ChangeNotifier {
         .map((product) => _productToRow(product)..remove('image_path'))
         .toList();
 
+  /// Serializes records and device settings for the local JSON file.
+  /// The cart and authenticated session are kept in memory only.
   Map<String, dynamic> _snapshot() => {
     'version': _dataVersion,
     'tutorial_dismissed': _tutorialDismissed,
@@ -1174,6 +1221,7 @@ class AppStore extends ChangeNotifier {
     'stock_additions': stockAdditions.map(_stockAdditionToRow).toList(),
   };
 
+  /// Restores an inventory record from snapshot JSON.
   Product _productFromRow(Map<String, dynamic> row) {
     return Product(
       id: '${row['id']}',
@@ -1190,6 +1238,7 @@ class AppStore extends ChangeNotifier {
     );
   }
 
+  /// Restores a customer and nested ledger entries from snapshot JSON.
   Customer _customerFromRow(Map<String, dynamic> row) {
     return Customer(
       id: '${row['id']}',
@@ -1199,6 +1248,7 @@ class AppStore extends ChangeNotifier {
     );
   }
 
+  /// Restores a historical sale and saved items from snapshot JSON.
   SaleRecord _saleFromRow(Map<String, dynamic> row) {
     return SaleRecord(
       id: '${row['id']}',
@@ -1214,6 +1264,7 @@ class AppStore extends ChangeNotifier {
     );
   }
 
+  /// Restores product details and prices captured at the time of sale.
   SaleItem _saleItemFromRow(Map<String, dynamic> row) {
     return SaleItem(
       productId: '${row['product_id']}',
@@ -1224,6 +1275,7 @@ class AppStore extends ChangeNotifier {
     );
   }
 
+  /// Restores a stock-in audit record from snapshot JSON.
   StockAddition _stockAdditionFromRow(Map<String, dynamic> row) {
     return StockAddition(
       id: '${row['id']}',
@@ -1236,6 +1288,7 @@ class AppStore extends ChangeNotifier {
     );
   }
 
+  /// Restores a customer credit or repayment entry from snapshot JSON.
   LedgerEntry _ledgerFromRow(Map<String, dynamic> row) {
     return LedgerEntry(
       id: '${row['id']}',
@@ -1249,6 +1302,7 @@ class AppStore extends ChangeNotifier {
     );
   }
 
+  /// Serializes inventory fields and photo references for snapshots.
   Map<String, dynamic> _productToRow(Product product) => {
     'id': product.id,
     'name': product.name,
@@ -1263,6 +1317,7 @@ class AppStore extends ChangeNotifier {
     'is_archived': product.isArchived,
   };
 
+  /// Serializes customer contact details and ledger entries for snapshots.
   Map<String, dynamic> _customerToRow(Customer customer) => {
     'id': customer.id,
     'name': customer.name,
@@ -1270,6 +1325,7 @@ class AppStore extends ChangeNotifier {
     'ledger': customer.ledger.map(_ledgerToRow).toList(),
   };
 
+  /// Serializes a credit or repayment and its optional sale reference.
   Map<String, dynamic> _ledgerToRow(LedgerEntry entry) => {
     'id': entry.id,
     'created_at': entry.createdAt.toIso8601String(),
@@ -1279,6 +1335,7 @@ class AppStore extends ChangeNotifier {
     'sale_id': entry.saleId,
   };
 
+  /// Serializes historical items, totals, payment, and customer reference.
   Map<String, dynamic> _saleToRow(SaleRecord sale) => {
     'id': sale.id,
     'created_at': sale.createdAt.toIso8601String(),
@@ -1290,6 +1347,7 @@ class AppStore extends ChangeNotifier {
     'customer_id': sale.customerId,
   };
 
+  /// Serializes a stock-in record and source note for snapshots.
   Map<String, dynamic> _stockAdditionToRow(StockAddition addition) => {
     'id': addition.id,
     'product_id': addition.productId,
@@ -1300,6 +1358,7 @@ class AppStore extends ChangeNotifier {
     'note': addition.note,
   };
 
+  /// Serializes quantities and prices preserved in a historical sale item.
   Map<String, dynamic> _saleItemToRow(SaleItem item) => {
     'product_id': item.productId,
     'product_name': item.productName,
@@ -1308,11 +1367,14 @@ class AppStore extends ChangeNotifier {
     'unit_cost': item.unitCost,
   };
 
+  /// Starts a local save without waiting; checkout and payment can await its result.
   void _queueSave() {
     _lastQueuedSave = _saveNow();
     unawaited(_lastQueuedSave);
   }
 
+  /// Captures a snapshot and queues its disk write after earlier saves.
+  /// Returns save errors to the caller; does not upload store records.
   Future<String?> _saveNow() {
     _revision++;
     if (_loadFailed) {
@@ -1339,6 +1401,7 @@ class AppStore extends ChangeNotifier {
     return save;
   }
 
+  /// Creates a numeric ID greater than the supplied IDs and the current timestamp.
   String _nextId(Iterable<String> ids) {
     var greatest = DateTime.now().microsecondsSinceEpoch - 1;
     for (final id in ids) {

@@ -10,6 +10,7 @@ class LocalStorageService {
 
   final File file;
 
+  /// Uses the app support directory for sariscan_store.json and managed photos.
   static Future<LocalStorageService> create() async {
     final directory = await getApplicationSupportDirectory();
     return LocalStorageService(
@@ -17,6 +18,7 @@ class LocalStorageService {
     );
   }
 
+  /// Reads local JSON into a map, falling back to the .bak file if needed.
   Future<Map<String, dynamic>?> loadSnapshot() async {
     Object? firstError;
     for (final source in [file, File('${file.path}.bak')]) {
@@ -37,6 +39,7 @@ class LocalStorageService {
     return null;
   }
 
+  /// Writes JSON through a .tmp file and keeps the previous snapshot as .bak.
   Future<void> saveSnapshot(Map<String, dynamic> snapshot) async {
     await file.parent.create(recursive: true);
     final temporary = File('${file.path}.tmp');
@@ -61,6 +64,7 @@ class LocalStorageService {
     }
   }
 
+  /// Copies a selected photo into local product_images and returns the new path.
   Future<String> importProductImage(String sourcePath) async {
     final source = File(sourcePath);
     if (!await source.exists()) {
@@ -82,10 +86,7 @@ class LocalStorageService {
     return destination.path;
   }
 
-  /// Saves raw image bytes — e.g. downloaded from a synced product's
-  /// ImgBB URL — into the same local product_images folder used by
-  /// [importProductImage], so a downloaded photo displays and gets
-  /// cleaned up exactly like a locally-imported one.
+  /// Writes downloaded photo bytes to local product_images and returns the path.
   Future<String> saveImageBytes(
     List<int> bytes, {
     String extension = '.jpg',
@@ -102,6 +103,7 @@ class LocalStorageService {
     return destination.path;
   }
 
+  /// Deletes a file only when it resolves inside the app's local photo folder.
   Future<void> deleteProductImage(String? imagePath) async {
     if (imagePath == null || imagePath.isEmpty) return;
     final cache = Directory(

@@ -23,6 +23,7 @@ class _SariScanAppState extends State<SariScanApp> {
   late final PhoneSecurityAuthenticator _phoneSecurity;
 
   @override
+  /// Uses the supplied store and phone security service, or creates local instances.
   void initState() {
     super.initState();
     _ownsStore = widget.store == null;
@@ -37,6 +38,7 @@ class _SariScanAppState extends State<SariScanApp> {
   }
 
   @override
+  /// Reads store state to choose login or home and apply language and theme.
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: store.dataChanges,

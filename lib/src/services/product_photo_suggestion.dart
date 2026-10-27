@@ -105,9 +105,11 @@ ProductPhotoSuggestion suggestProductFromPhoto(
   return ProductPhotoSuggestion(name: name, category: _inferCategory(name));
 }
 
+/// Removes label symbols and repeated spaces from recognized text.
 String _clean(String text) =>
     text.replaceAll(RegExp('[™®©]'), '').replaceAll(RegExp(r'\s+'), ' ').trim();
 
+/// Normalizes label text and units for comparison with saved product names.
 String _normalize(String text) => _clean(text)
     .toLowerCase()
     .replaceAllMapped(
@@ -137,6 +139,7 @@ final _packagingText = RegExp(
   caseSensitive: false,
 );
 
+/// Filters out packaging instructions, promotions, and unlikely name text.
 bool _isName(String value) {
   final text = _clean(value);
   if (text.length < 2 ||
@@ -168,6 +171,7 @@ bool _isName(String value) {
   return letters >= 2 && letters / text.length >= .45;
 }
 
+/// Orders OCR lines by row, then left to right within the same row.
 int _readingOrder(TextLine a, TextLine b) {
   final boxA = a.boundingBox;
   final boxB = b.boundingBox;
@@ -178,6 +182,7 @@ int _readingOrder(TextLine a, TextLine b) {
   return boxA.top.compareTo(boxB.top);
 }
 
+/// Returns a category from local keyword rules, or null when none match.
 String? _inferCategory(String name) {
   final text = ' ${_normalize(name)} ';
   const categories = {

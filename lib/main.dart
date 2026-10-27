@@ -21,6 +21,7 @@ const _supabaseAnonKey = String.fromEnvironment(
   defaultValue: 'sb_publishable_MfYnja_5n658MMsCcvOVcw_yS2MR9NY',
 );
 
+/// Opens local storage, restores AppStore, and starts the UI with optional sync.
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 

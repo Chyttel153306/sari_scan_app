@@ -141,6 +141,7 @@ class _TutorialScreenState extends State<TutorialScreen> {
     super.dispose();
   }
 
+  /// Moves the tutorial page controller to the selected step.
   void _goTo(int index) {
     setState(() => _index = index);
     if (_scroll.hasClients) _scroll.jumpTo(0);

@@ -41,6 +41,7 @@ class _HomeShellState extends State<HomeShell> {
     });
   }
 
+  /// Shows the tour over app tabs and saves its dismissal on this phone.
   Future<void> _openTutorial() async {
     if (_tourOpen) return;
     _tourOpen = true;
@@ -91,6 +92,7 @@ class _HomeShellState extends State<HomeShell> {
     await widget.store.dismissTutorial();
   }
 
+  /// Opens navigation and account actions using the shared AppStore.
   void _openMore() {
     showModalBottomSheet<void>(
       context: context,

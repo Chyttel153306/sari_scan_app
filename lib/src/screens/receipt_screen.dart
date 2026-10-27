@@ -16,6 +16,7 @@ class ReceiptScreen extends StatelessWidget {
 
   final SaleRecord sale;
 
+  /// Builds PDF bytes in memory from the saved sale and bundled logo.
   Future<Uint8List> _buildReceiptPdf(
     PdfPageFormat format,
     AppStrings strings,
@@ -100,6 +101,7 @@ class ReceiptScreen extends StatelessWidget {
     return document.save();
   }
 
+  /// Formats one receipt label and value inside the generated PDF.
   pw.Widget _pdfRow(String label, String value, {bool bold = false}) {
     final style = bold ? pw.TextStyle(fontWeight: pw.FontWeight.bold) : null;
     return pw.Padding(
@@ -114,6 +116,7 @@ class ReceiptScreen extends StatelessWidget {
     );
   }
 
+  /// Passes generated receipt PDF bytes to the device's print interface.
   Future<void> _print(BuildContext context) async {
     final strings = context.strings;
     try {
@@ -133,6 +136,7 @@ class ReceiptScreen extends StatelessWidget {
     }
   }
 
+  /// Passes receipt PDF bytes to the device's share interface for the chosen destination.
   Future<void> _share(BuildContext context) async {
     try {
       final bytes = await _buildReceiptPdf(PdfPageFormat.a4, context.strings);

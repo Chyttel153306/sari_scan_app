@@ -37,6 +37,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
     super.dispose();
   }
 
+  /// Filters the local catalog by search, category, and archive visibility.
   List<Product> get _products {
     final query = _query.trim().toLowerCase();
     return widget.store.products.where((product) {
@@ -49,6 +50,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
     }).toList()..sort((a, b) => a.name.compareTo(b.name));
   }
 
+  /// Passes the selected product and shared store to the product editor.
   Future<void> _editProduct([Product? product]) async {
     await Navigator.push<Product>(
       context,
@@ -58,6 +60,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
     );
   }
 
+  /// Opens stock entry and displays the record returned after AppStore updates it.
   Future<void> _addStock(Product product) async {
     final addition = await showDialog<StockAddition>(
       context: context,
@@ -76,6 +79,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
     );
   }
 
+  /// Confirms deletion before AppStore removes the product and queues a local save.
   Future<void> _deleteProduct(Product product) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -270,6 +274,7 @@ class _AddStockDialogState extends State<AddStockDialog> {
 
   int get _quantityValue => int.tryParse(_quantity.text) ?? 0;
 
+  /// Sends the validated stock quantity and note to AppStore and returns the record.
   void _save() {
     if (_submitted || !(_formKey.currentState?.validate() ?? false)) return;
     try {
@@ -484,7 +489,7 @@ class _ProductDialogState extends State<ProductDialog> {
     super.dispose();
   }
 
-  /// Existing categories drawn from current inventory, deduped and sorted.
+  /// Returns unique, sorted categories from inventory for local form suggestions.
   List<String> get _existingCategories {
     final categories =
         widget.store.products
@@ -496,6 +501,7 @@ class _ProductDialogState extends State<ProductDialog> {
     return categories;
   }
 
+  /// Filters category suggestions against the text currently typed in the form.
   List<String> _filteredCategories(String query) {
     final categories = _existingCategories;
     final normalized = query.trim().toLowerCase();
@@ -505,6 +511,7 @@ class _ProductDialogState extends State<ProductDialog> {
         .toList();
   }
 
+  /// Copies a suggestion into the form; it is stored when the product is saved.
   void _selectCategory(String category) {
     _category.text = category;
     _category.selection = TextSelection.collapsed(offset: category.length);
@@ -609,6 +616,8 @@ class _ProductDialogState extends State<ProductDialog> {
       ? value.toStringAsFixed(0)
       : value.toStringAsFixed(1);
 
+  /// Validates the form, prepares the photo, and sends product values to AppStore.
+  /// Returns the saved product to the caller after queuing local persistence.
   Future<void> _save() async {
     if (_saving) return;
     if (!(_formKey.currentState?.validate() ?? false)) return;
@@ -621,9 +630,8 @@ class _ProductDialogState extends State<ProductDialog> {
     final barcode = normalizeBarcode(_barcode.text);
     final threshold = int.parse(_threshold.text);
     setState(() => _saving = true);
-    // Imports the photo locally and, when an image sync service is
-    // configured, uploads it to ImgBB so it can follow this product to
-    // other phones on the next cloud sync.
+    // Copy the photo locally and upload to Supabase Storage if linked.
+    // The product stores the local file path and the returned Storage path.
     ImportedProductImage imported;
     try {
       imported = await widget.store.importProductImage(
@@ -666,6 +674,7 @@ class _ProductDialogState extends State<ProductDialog> {
     }
   }
 
+  /// Gets a camera or gallery file and uses it for the form preview and local OCR.
   Future<void> _pickPhoto() async {
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
@@ -712,6 +721,7 @@ class _ProductDialogState extends State<ProductDialog> {
     }
   }
 
+  /// Updates the form photo and clears untouched suggestions from the previous photo.
   void _setPhoto(String? path) {
     setState(() {
       _photoReadId++;
@@ -780,6 +790,7 @@ class _ProductDialogState extends State<ProductDialog> {
     }
   }
 
+  /// Copies the scanner's returned barcode into the form for later product saving.
   Future<void> _scanBarcode() async {
     final barcode = await Navigator.push<String>(
       context,
@@ -1143,10 +1154,12 @@ class _ProductDialogState extends State<ProductDialog> {
     );
   }
 
+  /// Rejects an empty required form field before values reach AppStore.
   String? _required(String? value) => value == null || value.trim().isEmpty
       ? context.tr('This field is required.')
       : null;
 
+  /// Rejects missing, non-finite, or negative prices before saving.
   String? _money(String? value) {
     final number = double.tryParse(value ?? '');
     return number == null || !number.isFinite || number < 0
@@ -1154,6 +1167,7 @@ class _ProductDialogState extends State<ProductDialog> {
         : null;
   }
 
+  /// Rejects invalid or negative inventory quantities before saving.
   String? _wholeNumber(String? value) {
     final number = int.tryParse(value ?? '');
     return number == null || number < 0 ? context.tr('Enter 0 or more.') : null;

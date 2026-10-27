@@ -35,6 +35,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     super.dispose();
   }
 
+  /// Sends payment details to AppStore and waits for the local sale save.
+  /// Passes the saved SaleRecord to the receipt screen on success.
   Future<void> _complete() async {
     if (_completing) return;
     setState(() {
@@ -64,6 +66,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
   }
 
+  /// Opens customer creation and selects its returned record for an utang sale.
   Future<void> _addCustomer() async {
     final customer = await showDialog<Customer>(
       context: context,
@@ -76,6 +79,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     });
   }
 
+  /// Changes the form's payment type and clears its previous error.
   void _selectPayment(PaymentType type) => setState(() {
     _paymentType = type;
     _error = null;

@@ -11,8 +11,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 ///
 /// Photos are stored in the private `product-images` bucket under
 /// `<SYNC_CODE>/<file>`, and that path is what [Product.imageUrl] holds.
-/// Storage policies (see `sariscan_supabase_setup.sql`) only let members of
-/// the store read, upload, replace or delete files in its folder.
+/// Storage policies must restrict access to members of the store.
 ///
 /// Values that start with `http` are legacy ImgBB URLs from before the
 /// migration. They are still readable here so existing photos can be moved
@@ -45,17 +44,20 @@ class SupabaseImageService {
   static bool isLegacyUrl(String reference) =>
       reference.startsWith('http://') || reference.startsWith('https://');
 
+  /// Ensures a Supabase session exists before accessing the private photo bucket.
   Future<void> _ensureSignedIn() async {
     if (_client.auth.currentSession != null) return;
     await _client.auth.signInAnonymously().timeout(requestTimeout);
   }
 
+  /// Chooses a supported upload extension, defaulting to jpg.
   static String _extensionOf(String path) {
     final dot = path.lastIndexOf('.');
     final extension = dot >= 0 ? path.substring(dot + 1).toLowerCase() : '';
     return _contentTypes.containsKey(extension) ? extension : 'jpg';
   }
 
+  /// Creates a timestamp and random suffix for a Storage object name.
   static String _uniqueName() {
     final random = Random.secure();
     final suffix = List.generate(
@@ -128,6 +130,7 @@ class SupabaseImageService {
         .timeout(requestTimeout);
   }
 
+  /// Closes the HTTP client only when this service created it.
   void dispose() {
     if (_ownsHttpClient) _httpClient.close();
   }

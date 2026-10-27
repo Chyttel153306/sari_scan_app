@@ -20,6 +20,8 @@ class PhoneSecurityService implements PhoneSecurityAuthenticator {
   final LocalAuthentication _localAuthentication;
 
   @override
+  /// Asks the phone's security system to verify the user and returns the result.
+  /// The operating system handles biometric data and the device PIN.
   Future<PhoneSecurityResult> authenticate() async {
     try {
       if (!await _localAuthentication.isDeviceSupported()) {
