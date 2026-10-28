@@ -7,6 +7,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../utils/barcodes.dart';
 
+/// Reads a barcode using the camera or manual entry and returns its text.
 class BarcodeScannerScreen extends StatefulWidget {
   const BarcodeScannerScreen({super.key});
 
@@ -102,6 +103,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
                 return Stack(
                   alignment: Alignment.center,
                   children: [
+                    // Scan inside the guide and return the first valid result.
                     Positioned.fill(
                       child: MobileScanner(
                         controller: _scannerController,
@@ -165,6 +167,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
               },
             ),
           ),
+          // Manual entry remains available if the camera cannot scan.
           ColoredBox(
             color: colors.surface,
             child: SafeArea(
@@ -219,6 +222,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
   }
 }
 
+/// Toggles the flashlight when the running camera supports it.
 class _TorchButton extends StatelessWidget {
   const _TorchButton({required this.controller});
 

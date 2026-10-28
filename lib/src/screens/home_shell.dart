@@ -11,6 +11,7 @@ import 'settings_screen.dart';
 import '../widgets/guided_tutorial.dart';
 import 'utang_screen.dart';
 
+/// Hosts the main tabs and opens account settings and the app tour.
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key, required this.store});
 
@@ -270,6 +271,7 @@ class _HomeShellState extends State<HomeShell> {
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 760),
+          // Keep visited tabs open so switching tabs preserves their UI state.
           child: IndexedStack(
             index: _index,
             children: [
@@ -282,6 +284,7 @@ class _HomeShellState extends State<HomeShell> {
           ),
         ),
       ),
+      // Switch sections; More opens the account menu.
       bottomNavigationBar: DecoratedBox(
         decoration: BoxDecoration(
           color: AppTheme.of(context).base,

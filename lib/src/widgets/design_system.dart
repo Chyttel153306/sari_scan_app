@@ -89,6 +89,7 @@ class StatusPill extends StatelessWidget {
   );
 }
 
+/// Labels a UI section with optional supporting text and a trailing widget.
 class SectionHeading extends StatelessWidget {
   const SectionHeading(this.title, {super.key, this.subtitle, this.trailing});
   final String title;
@@ -192,6 +193,7 @@ class MetricHero extends StatelessWidget {
   );
 }
 
+/// Explains an empty list and suggests what the user can do next.
 class EmptyState extends StatelessWidget {
   const EmptyState({
     super.key,

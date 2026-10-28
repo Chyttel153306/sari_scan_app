@@ -13,6 +13,7 @@ import 'tutorial_screen.dart';
 
 enum _SyncAction { create, join, push, pull, leave }
 
+/// Edits store preferences and provides sync, help, and account actions.
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key, required this.store, this.onStartTutorial});
   final VoidCallback? onStartTutorial;
@@ -703,6 +704,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ],
                     ),
+                    // Language, theme, and markup are saved on this phone.
                     _SettingsGroup(
                       title: context.tr("Preferences"),
                       children: [
@@ -734,6 +736,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ],
                     ),
+                    // Show local storage status and manual cloud sync controls.
                     SectionHeading(context.tr("Data & sync")),
                     const SizedBox(height: 12),
                     Card(
@@ -1053,6 +1056,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
+/// Edits the default price markup with a live selling-price preview.
 class _MarkupDialog extends StatefulWidget {
   const _MarkupDialog({required this.store});
   final AppStore store;
@@ -1262,6 +1266,7 @@ class _MarkupDialogState extends State<_MarkupDialog> {
   }
 }
 
+/// Groups related settings under a shared heading.
 class _SettingsGroup extends StatelessWidget {
   const _SettingsGroup({required this.title, required this.children});
   final String title;
@@ -1292,6 +1297,7 @@ class _SettingsGroup extends StatelessWidget {
   );
 }
 
+/// Displays a setting's icon, description, and optional tap action.
 class _SettingsRow extends StatelessWidget {
   const _SettingsRow({
     required this.icon,
@@ -1348,6 +1354,7 @@ class _SettingsRow extends StatelessWidget {
   }
 }
 
+/// Indicates that a settings operation is still running.
 class _SettingsProgress extends StatelessWidget {
   const _SettingsProgress();
   @override
@@ -1357,6 +1364,7 @@ class _SettingsProgress extends StatelessWidget {
   );
 }
 
+/// Displays a help question and its short explanation.
 class _HelpAnswer extends StatelessWidget {
   const _HelpAnswer(this.question, this.answer);
   final String question;

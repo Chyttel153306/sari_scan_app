@@ -14,6 +14,7 @@ import 'barcode_scanner_screen.dart';
 import 'checkout_screen.dart';
 import 'products_screen.dart';
 
+/// Lets the cashier find products, add them to the cart, and start checkout.
 class PosScreen extends StatefulWidget {
   const PosScreen({super.key, required this.store, this.scanTutorialKey});
   final Key? scanTutorialKey;
@@ -164,6 +165,7 @@ class _PosScreenState extends State<PosScreen> {
           children: [
             CustomScrollView(
               slivers: [
+                // Search by name or barcode, or open the camera scanner.
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
@@ -206,6 +208,7 @@ class _PosScreenState extends State<PosScreen> {
                     ),
                   ),
                 ),
+                // Category chips narrow the products shown below.
                 SliverToBoxAdapter(
                   child: SizedBox(
                     height: 52,
@@ -279,6 +282,7 @@ class _PosScreenState extends State<PosScreen> {
                         itemCount: visibleProducts.length,
                         itemBuilder: (context, index) {
                           final product = visibleProducts[index];
+                          // Only products with stock can be added to the cart.
                           return CatalogProductCard(
                             key: ValueKey(product.id),
                             product: product,
@@ -292,6 +296,7 @@ class _PosScreenState extends State<PosScreen> {
                   ),
               ],
             ),
+            // Show the cart total and checkout action once an item is added.
             ListenableBuilder(
               listenable: widget.store,
               builder: (context, _) => widget.store.cartItemCount == 0
@@ -383,6 +388,7 @@ class _PosScreenState extends State<PosScreen> {
   }
 }
 
+/// Shows cart items with quantity controls and a checkout button.
 class _CartSheet extends StatelessWidget {
   const _CartSheet({required this.store, required this.onCheckout});
 

@@ -15,6 +15,7 @@ import '../theme/app_theme.dart';
 import '../widgets/product_grid.dart';
 import 'barcode_scanner_screen.dart';
 
+/// Manages inventory with search, editing, restocking, and archive actions.
 class ProductsScreen extends StatefulWidget {
   const ProductsScreen({super.key, required this.store, this.addTutorialKey});
   final Key? addTutorialKey;
@@ -122,6 +123,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
           ListView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
             children: [
+              // Search and category filters control the inventory list.
               TextField(
                 controller: _searchController,
                 onChanged: (value) => setState(() => _query = value),
@@ -187,6 +189,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                       style: TextStyle(fontSize: 12),
                     ),
                   ),
+                  // Include archived products when this switch is enabled.
                   Switch(
                     value: _showArchived,
                     onChanged: (value) => setState(() => _showArchived = value),
@@ -213,6 +216,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                     itemCount: _products.length,
                     itemBuilder: (context, index) {
                       final product = _products[index];
+                      // Each card exposes the actions for this product.
                       return CatalogProductCard(
                         inventory: true,
                         product: product,
@@ -233,6 +237,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                 ),
             ],
           ),
+          // The plus button opens an empty product form.
           Positioned(
             right: 16,
             bottom: 16,
@@ -249,6 +254,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
   }
 }
 
+/// Records a stock delivery and shows previous stock additions.
 class AddStockDialog extends StatefulWidget {
   const AddStockDialog({super.key, required this.store, required this.product});
 
@@ -388,6 +394,7 @@ class _AddStockDialogState extends State<AddStockDialog> {
   }
 }
 
+/// Adds or edits a product's photo, details, prices, stock, and barcode.
 class ProductDialog extends StatefulWidget {
   const ProductDialog({
     super.key,
@@ -518,6 +525,7 @@ class _ProductDialogState extends State<ProductDialog> {
     _closeCategoryDropdown();
   }
 
+  /// Shows matching inventory categories below the category field.
   void _openCategoryDropdown() {
     if (_categoryOverlayEntry != null) {
       _categoryOverlayEntry!.markNeedsBuild();
@@ -579,6 +587,7 @@ class _ProductDialogState extends State<ProductDialog> {
     setState(() => _categoryDropdownOpen = true);
   }
 
+  /// Removes the floating category suggestions.
   void _closeCategoryDropdown() {
     _categoryOverlayEntry?.remove();
     _categoryOverlayEntry = null;

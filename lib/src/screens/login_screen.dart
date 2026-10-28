@@ -6,6 +6,7 @@ import '../store/app_store.dart';
 import '../widgets/design_system.dart';
 import '../theme/app_theme.dart';
 
+/// Collects the store name and uses phone security to unlock the app.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({
     super.key,
@@ -238,6 +239,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ),
                               const SizedBox(height: 24),
+                              // Validate the store name before checking phone security.
                               TextFormField(
                                 controller: _nameController,
                                 textCapitalization: TextCapitalization.words,
@@ -381,6 +383,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
 /// Dedicated dialog widget for changing the store name.
 ///
+/// Lets the owner enter a new store name and returns it to the caller.
 /// The TextEditingController belongs to this widget's State,
 /// so it stays alive for the entire lifetime of the dialog and
 /// is disposed only when the dialog widget itself is disposed.

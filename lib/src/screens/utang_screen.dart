@@ -11,6 +11,7 @@ import '../widgets/price_text.dart';
 import '../models/sales_trend.dart';
 import '../theme/app_theme.dart';
 
+/// Lists customer debts, weekly collections, and links to each ledger.
 class UtangScreen extends StatefulWidget {
   const UtangScreen({super.key, required this.store});
 
@@ -106,6 +107,7 @@ class _UtangScreenState extends State<UtangScreen> {
                   ),
                 ),
                 const SizedBox(height: 22),
+                // Search by name or phone, then filter by payment status.
                 TextField(
                   onChanged: (value) => setState(() => _query = value),
                   decoration: InputDecoration(
@@ -155,6 +157,7 @@ class _UtangScreenState extends State<UtangScreen> {
                     ),
                     icon: Icons.people_outline,
                   ),
+                // Open a customer's ledger to review debt and record payments.
                 ...customers.map(
                   (customer) => Padding(
                     padding: const EdgeInsets.only(bottom: 10),
@@ -293,6 +296,7 @@ class _UtangScreenState extends State<UtangScreen> {
   }
 }
 
+/// Shows one customer's credit purchases, repayments, and unpaid balance.
 class CustomerLedgerScreen extends StatelessWidget {
   const CustomerLedgerScreen({
     super.key,
@@ -402,6 +406,7 @@ class CustomerLedgerScreen extends StatelessWidget {
                     Text(customer.phone),
                     const SizedBox(height: 12),
                   ],
+                  // Allow repayment only while the customer has unpaid debt.
                   FilledButton.icon(
                     style: FilledButton.styleFrom(
                       backgroundColor: AppTheme.of(context).baseSunken,
@@ -434,6 +439,7 @@ class CustomerLedgerScreen extends StatelessWidget {
                 ),
               )
             else
+              // Credits increase the debt; payments reduce it.
               ...customer.ledger.map(
                 (entry) => Padding(
                   padding: const EdgeInsets.only(bottom: 10),

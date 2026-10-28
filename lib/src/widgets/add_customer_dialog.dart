@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../models/models.dart';
 import '../store/app_store.dart';
 
+/// Collects a customer's name and phone number for the utang book.
 class AddCustomerDialog extends StatefulWidget {
   const AddCustomerDialog({super.key, required this.store});
 

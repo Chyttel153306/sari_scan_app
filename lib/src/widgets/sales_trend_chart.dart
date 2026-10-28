@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../models/sales_trend.dart';
 import '../utils/formatters.dart';
 
+/// Displays scrollable sales bars; tapping a bar reveals its total.
 class SalesTrendChart extends StatefulWidget {
   const SalesTrendChart({super.key, required this.points});
 

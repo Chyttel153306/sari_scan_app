@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+/// Shows a product photo or a placeholder when no image can be loaded.
 class ProductImage extends StatelessWidget {
   const ProductImage({
     super.key,

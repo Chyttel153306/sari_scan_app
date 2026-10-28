@@ -6,6 +6,7 @@ enum LedgerEntryType { credit, payment }
 
 enum ReportPeriod { today, week, month, year }
 
+/// Inventory details used by product cards, the cart, and stock alerts.
 class Product {
   Product({
     required this.id,
@@ -62,6 +63,7 @@ class StockAddition {
   final String note;
 }
 
+/// Pairs a product with the quantity currently selected for purchase.
 class CartLine {
   const CartLine({required this.product, required this.quantity});
 
@@ -71,6 +73,7 @@ class CartLine {
   double get subtotal => roundMoney(product.price * quantity);
 }
 
+/// Keeps the product name, quantity, and prices recorded at checkout.
 class SaleItem {
   const SaleItem({
     required this.productId,
@@ -89,6 +92,7 @@ class SaleItem {
   double get subtotal => quantity * unitPrice;
 }
 
+/// Stores a completed transaction for receipts and sales reports.
 class SaleRecord {
   const SaleRecord({
     required this.id,
@@ -111,6 +115,7 @@ class SaleRecord {
   final String? customerId;
 }
 
+/// Records a credit purchase or repayment in a customer's utang history.
 class LedgerEntry {
   const LedgerEntry({
     required this.id,
@@ -129,6 +134,7 @@ class LedgerEntry {
   final String? saleId;
 }
 
+/// Holds customer contact details and the ledger used to calculate their debt.
 class Customer {
   Customer({
     required this.id,

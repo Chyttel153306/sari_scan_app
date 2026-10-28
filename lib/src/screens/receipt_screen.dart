@@ -11,6 +11,7 @@ import '../theme/app_theme.dart';
 import '../widgets/design_system.dart';
 import '../widgets/price_text.dart';
 
+/// Displays a saved sale with payment details and PDF print/share actions.
 class ReceiptScreen extends StatelessWidget {
   const ReceiptScreen({super.key, required this.sale});
 
@@ -162,6 +163,7 @@ class ReceiptScreen extends StatelessWidget {
     final isCash = sale.paymentType == PaymentType.cash;
     return Scaffold(
       appBar: AppBar(title: Text(context.tr("Transaction Complete"))),
+      // Print or share the receipt, or return to begin another sale.
       bottomNavigationBar: SafeArea(
         top: false,
         child: Container(
@@ -302,6 +304,7 @@ class ReceiptScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 22),
+              // Render the itemized receipt with a torn-paper edge.
               PhysicalShape(
                 clipper: _ReceiptClipper(),
                 color: AppTheme.of(context).baseSunken,
@@ -460,6 +463,7 @@ class ReceiptScreen extends StatelessWidget {
   }
 }
 
+/// Draws the receipt's rounded top and zigzag bottom edge.
 class _ReceiptClipper extends CustomClipper<Path> {
   @override
   Path getClip(Size size) {
@@ -485,6 +489,7 @@ class _ReceiptClipper extends CustomClipper<Path> {
   bool shouldReclip(_ReceiptClipper oldClipper) => false;
 }
 
+/// Aligns a receipt label with its value and optionally emphasizes totals.
 class _ReceiptRow extends StatelessWidget {
   const _ReceiptRow({
     required this.label,

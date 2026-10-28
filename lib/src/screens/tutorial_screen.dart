@@ -1,6 +1,7 @@
 import '../l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 
+/// Explains store tasks with selectable topics and step-by-step navigation.
 class TutorialScreen extends StatefulWidget {
   const TutorialScreen({super.key, this.firstUse = false});
 
@@ -185,6 +186,7 @@ class _TutorialScreenState extends State<TutorialScreen> {
                 ),
               ),
               const SizedBox(height: 16),
+              // Topic chips jump directly to the selected lesson.
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -289,6 +291,7 @@ class _TutorialScreenState extends State<TutorialScreen> {
           ),
         ),
       ),
+      // Move between lessons or close the guide after the final step.
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),

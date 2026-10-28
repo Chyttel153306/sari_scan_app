@@ -1,5 +1,6 @@
 import 'models.dart';
 
+/// A labeled time range and sales total displayed as one chart bar.
 class SalesTrendPoint {
   const SalesTrendPoint({
     required this.label,

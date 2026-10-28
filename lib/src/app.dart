@@ -7,6 +7,7 @@ import 'services/phone_security_service.dart';
 import 'store/app_store.dart';
 import 'theme/app_theme.dart';
 
+/// Sets the app theme, language, and login or home screen.
 class SariScanApp extends StatefulWidget {
   const SariScanApp({super.key, this.store, this.phoneSecurity});
 

@@ -11,6 +11,7 @@ import '../widgets/design_system.dart';
 import '../theme/app_theme.dart';
 import 'receipt_screen.dart';
 
+/// Reviews the order and collects cash or assigns utang to a customer.
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key, required this.store});
 
@@ -98,6 +99,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       canPop: !_completing,
       child: Scaffold(
         appBar: AppBar(title: Text(context.tr("Checkout"))),
+        // Enable sale completion when payment details are ready.
         bottomNavigationBar: Padding(
           padding: EdgeInsets.only(
             bottom: MediaQuery.viewInsetsOf(context).bottom,
@@ -264,6 +266,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   ],
                 ),
                 const SizedBox(height: 16),
+                // Cash entry updates the change or remaining amount due.
                 if (_paymentType == PaymentType.cash)
                   Card(
                     child: Padding(
@@ -363,6 +366,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          // Credit sales must belong to a customer ledger.
                           SectionHeading(
                             context.tr("Select customer for utang"),
                             subtitle: context.tr(
@@ -435,6 +439,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 }
 
+/// A selectable payment card that runs its supplied tap action.
 class _PaymentOption extends StatelessWidget {
   const _PaymentOption({
     required this.label,

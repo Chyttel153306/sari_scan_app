@@ -9,6 +9,7 @@ import 'price_text.dart';
 import 'product_grid.dart';
 import 'product_image.dart';
 
+/// Shows a product with selling or inventory actions for the current screen.
 class CatalogProductCard extends StatelessWidget {
   const CatalogProductCard({
     super.key,
@@ -36,6 +37,7 @@ class CatalogProductCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: InkWell(
+        // Inventory taps edit the product; POS taps add it to the cart.
         onTap: inventory ? (product.isArchived ? null : onEdit) : onAdd,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,

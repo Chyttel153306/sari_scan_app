@@ -11,6 +11,7 @@ import '../widgets/design_system.dart';
 import '../theme/app_theme.dart';
 import 'receipt_screen.dart';
 
+/// Summarizes sales, profit, popular products, and receipts by date range.
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key, required this.store});
 
@@ -38,6 +39,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     return ListenableBuilder(
       listenable: widget.store.dataChanges,
       builder: (context, _) {
+        // Calculate every summary from sales in the selected period.
         final now = DateTime.now();
         final sales = widget.store.salesFor(_period, now: now);
         final total = sales.fold<double>(0, (sum, sale) => sum + sale.total);
@@ -78,6 +80,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
         return ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
           children: [
+            // Date tabs refresh the totals, chart, and transaction list.
             Container(
               padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
@@ -246,6 +249,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         ),
                       )
                     else
+                      // Tap chart bars to inspect sales for each time bucket.
                       SalesTrendChart(key: ValueKey(_period), points: trend),
                   ],
                 ),
@@ -343,6 +347,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
               ],
             ),
             const SizedBox(height: 8),
+            // Tap a saved transaction to reopen its receipt.
             if (sales.isEmpty)
               Card(
                 child: Padding(
@@ -410,6 +415,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 }
 
+/// Shows one payment type's amount and share of total sales.
 class _PaymentBar extends StatelessWidget {
   const _PaymentBar({
     required this.label,
